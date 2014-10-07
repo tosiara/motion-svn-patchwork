@@ -1,0 +1,49 @@
+From 60b1511b5349a3f194b923734ffdf4ecb85437ff Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Sat, 10 May 2014 11:38:21 +0300
+Subject: [PATCH 08/26] Bugfix for RTSP. Segfault after uncessfull connect
+ because motion does not check for failed connect attempt
+
+---
+ netcam.c      | 4 +++-
+ netcam_rtsp.c | 2 +-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/netcam.c b/netcam.c
+index e327a2f..6faa08c 100644
+--- a/netcam.c
++++ b/netcam.c
+@@ -2418,6 +2418,7 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+ {
+   struct context *cnt = netcam->cnt;
+   const char *ptr;
++  int ret = -1;
+   
+   netcam->caps.streaming = NCS_RTSP;
+   netcam->rtsp = rtsp_new_context();
+@@ -2470,7 +2471,8 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+    * The RTSP context should be all ready to attempt a connection with
+    * the server, so we try ....
+    */
+-  rtsp_connect(netcam);
++  ret = rtsp_connect(netcam);
++  if (ret < 0) return ret;
+ 
+   netcam->get_image = netcam_read_rtsp_image;
+ 
+diff --git a/netcam_rtsp.c b/netcam_rtsp.c
+index 1fe1357..87c4fd0 100644
+--- a/netcam_rtsp.c
++++ b/netcam_rtsp.c
+@@ -189,7 +189,7 @@ int rtsp_connect(netcam_context_ptr netcam)
+     MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %d - %s", netcam->rtsp->path, ret, av_err2str(ret));
+     rtsp_free_context(netcam->rtsp);
+     netcam->rtsp = NULL;
+-    return -1;
++    return ret;
+   }
+ 
+   // fill out stream information
+-- 
+1.8.1.4
+

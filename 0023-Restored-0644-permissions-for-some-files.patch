@@ -1,0 +1,42 @@
+From dbd847a9e91f686f8964654005d0550e7f6952ce Mon Sep 17 00:00:00 2001
+From: tos <tosiara@users.noreply.github.com>
+Date: Tue, 24 Jun 2014 21:38:28 +0300
+Subject: [PATCH 23/26] Restored 0644 permissions for some files CHANGELOG
+ INSTALL ffmpeg.c ffmpeg.h netcam.c netcam_rtsp.c
+
+---
+ CHANGELOG     | 0
+ INSTALL       | 0
+ ffmpeg.c      | 0
+ ffmpeg.h      | 0
+ netcam.c      | 0
+ netcam_rtsp.c | 0
+ 6 files changed, 0 insertions(+), 0 deletions(-)
+ mode change 100755 => 100644 CHANGELOG
+ mode change 100755 => 100644 INSTALL
+ mode change 100755 => 100644 ffmpeg.c
+ mode change 100755 => 100644 ffmpeg.h
+ mode change 100755 => 100644 netcam.c
+ mode change 100755 => 100644 netcam_rtsp.c
+
+diff --git a/CHANGELOG b/CHANGELOG
+old mode 100755
+new mode 100644
+diff --git a/INSTALL b/INSTALL
+old mode 100755
+new mode 100644
+diff --git a/ffmpeg.c b/ffmpeg.c
+old mode 100755
+new mode 100644
+diff --git a/ffmpeg.h b/ffmpeg.h
+old mode 100755
+new mode 100644
+diff --git a/netcam.c b/netcam.c
+old mode 100755
+new mode 100644
+diff --git a/netcam_rtsp.c b/netcam_rtsp.c
+old mode 100755
+new mode 100644
+-- 
+1.8.1.4
+

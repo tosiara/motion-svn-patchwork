@@ -1,0 +1,34 @@
+From 88fc47fa451e6131644d4463bd8f1eb5f7f88827 Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Mon, 17 Feb 2014 05:47:12 +1100
+Subject: [PATCH 01/26] Enhacement for extpipe. Added %w and %h variables to
+ use as width and height values in pipe command line Example: extpipe x264 -
+ --input-res %wx%h --fps %fps --bitrate 2000 --preset ultrafast --quiet -o
+ %f.mp4
+
+---
+ motion.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/motion.c b/motion.c
+index 60268b2..d238473 100644
+--- a/motion.c
++++ b/motion.c
+@@ -3200,6 +3200,14 @@ size_t mystrftime(const struct context *cnt, char *s, size_t max, const char *us
+                     ++pos_userformat;
+                 break;
+ 
++            case 'w': // picture width
++                sprintf(tempstr, "%d", cnt->imgs.width);
++                break;
++
++            case 'h': // picture height
++                sprintf(tempstr, "%d", cnt->imgs.height);
++                break;
++
+             case 'f': // filename -- or %fps
+                 if ((*(pos_userformat+1) == 'p') && (*(pos_userformat+2) == 's')) {
+                     sprintf(tempstr, "%d", cnt->movie_fps);
+-- 
+1.8.1.4
+

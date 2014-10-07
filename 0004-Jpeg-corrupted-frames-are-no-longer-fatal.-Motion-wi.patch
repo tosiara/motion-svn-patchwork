@@ -1,0 +1,26 @@
+From 4384c55f101daf8294f704ad65333a41e2877ee7 Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Fri, 2 May 2014 13:19:00 +0000
+Subject: [PATCH 04/26] Jpeg corrupted frames are no longer fatal. Motion will
+ gracefully skip such
+
+---
+ jpegutils.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jpegutils.c b/jpegutils.c
+index 9c9bc44..84caea4 100644
+--- a/jpegutils.c
++++ b/jpegutils.c
+@@ -478,7 +478,7 @@ int decode_jpeg_raw (unsigned char *jpeg_data, int len,
+     if (setjmp (jerr.setjmp_buffer)) {
+         /* If we get here, the JPEG code has signaled an error. */
+         jpeg_destroy_decompress (&dinfo);
+-        return -1;
++        return 1;
+     }
+ 
+     jpeg_create_decompress (&dinfo);
+-- 
+1.8.1.4
+

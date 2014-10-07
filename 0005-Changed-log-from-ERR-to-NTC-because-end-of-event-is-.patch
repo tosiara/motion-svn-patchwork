@@ -1,0 +1,29 @@
+From 8115bceaef85b4448b065553e59036325466550b Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Fri, 2 May 2014 14:46:28 +0000
+Subject: [PATCH 05/26] Changed log from ERR to NTC, because end of event is
+ not an error
+
+---
+ event.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/event.c b/event.c
+index e93c8d5..f8a7d28 100644
+--- a/event.c
++++ b/event.c
+@@ -416,9 +416,9 @@ static void event_extpipe_end(struct context *cnt, int type ATTRIBUTE_UNUSED,
+     if (cnt->extpipe_open) {
+         cnt->extpipe_open = 0;
+         fflush(cnt->extpipe);
+-        MOTION_LOG(ERR, TYPE_EVENTS, NO_ERRNO, "%s: CLOSING: extpipe file desc %d, error state %d",
++        MOTION_LOG(NTC, TYPE_EVENTS, NO_ERRNO, "%s: CLOSING: extpipe file desc %d, error state %d",
+                    fileno(cnt->extpipe), ferror(cnt->extpipe));
+-        MOTION_LOG(ERR, TYPE_EVENTS, NO_ERRNO, "%s: pclose return: %d",
++        MOTION_LOG(NTC, TYPE_EVENTS, NO_ERRNO, "%s: pclose return: %d",
+                    pclose(cnt->extpipe));
+         event(cnt, EVENT_FILECLOSE, NULL, cnt->extpipefilename, (void *)FTYPE_MPEG, NULL);
+     }
+-- 
+1.8.1.4
+

@@ -1,0 +1,28 @@
+From 65fb0fdc2e74293529ccf93151de107963bf4fbb Mon Sep 17 00:00:00 2001
+From: Dave <zz4077@comcast.net>
+Date: Thu, 19 Jun 2014 20:57:32 -0600
+Subject: [PATCH 19/26] Added support for libav V53
+
+---
+ netcam_rtsp.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/netcam_rtsp.h b/netcam_rtsp.h
+index 35ad6a1..a1770ed 100644
+--- a/netcam_rtsp.h
++++ b/netcam_rtsp.h
+@@ -15,10 +15,10 @@ struct rtsp_context {
+     char*                 user;
+     char*                 pass;
+     int                   readingframe;
++    int                   connected;
+     struct timeval        startreadtime;
+ };
+ 
+-//int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url);
+ struct rtsp_context *rtsp_new_context(void);
+ void netcam_shutdown_rtsp(netcam_context_ptr netcam);
+ int rtsp_connect(netcam_context_ptr netcam);
+-- 
+1.8.1.4
+

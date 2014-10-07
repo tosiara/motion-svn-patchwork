@@ -1,0 +1,53 @@
+From ce4d0ab347f556b1a24fbbb84a1e66dc3b4ad76d Mon Sep 17 00:00:00 2001
+From: Dave <zz4077@comcast.net>
+Date: Mon, 16 Jun 2014 17:28:36 -0600
+Subject: [PATCH 16/26] Call to netcam_shutdown_rtsp moved.
+
+---
+ CHANGELOG |  1 +
+ netcam.c  | 10 +++++-----
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/CHANGELOG b/CHANGELOG
+index c537cde..96d3e73 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -61,6 +61,7 @@ Features
+    * Revisions for RTSP and code standard.(Mr-Dave)
+    * Plugged most(?) memory leaks in RTSP. (Mr-Dave)
+    * Undo changes caused by code editor and other unnecessary changes
++   * Moved call to netcam_shutdown_rtsp into netcam_cleanup where it belongs.
+ 
+    
+ Bugfixes
+diff --git a/netcam.c b/netcam.c
+index 4a9b961..8c269ec 100644
+--- a/netcam.c
++++ b/netcam.c
+@@ -2085,11 +2085,6 @@ static void *netcam_handler_loop(void *arg)
+     /* The loop continues forever, or until motion shutdown. */
+     }
+ 
+-#ifdef FFMPEG_V55
+-    if (netcam->caps.streaming == NCS_RTSP)
+-        netcam_shutdown_rtsp(netcam);
+-#endif
+-
+     /* Our thread is finished - decrement motion's thread count. */
+     pthread_mutex_lock(&global_lock);
+     threads_running--;
+@@ -2713,6 +2708,11 @@ void netcam_cleanup(netcam_context_ptr netcam, int init_retry_flag)
+     if (netcam->response != NULL) 
+         free(netcam->response);
+ 
++#ifdef FFMPEG_V55
++    if (netcam->caps.streaming == NCS_RTSP)
++        netcam_shutdown_rtsp(netcam);
++#endif
++
+     pthread_mutex_destroy(&netcam->mutex);
+     pthread_cond_destroy(&netcam->cap_cond);
+     pthread_cond_destroy(&netcam->pic_ready);
+-- 
+1.8.1.4
+

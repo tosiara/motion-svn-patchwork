@@ -1,0 +1,127 @@
+From 7a27f3f81455de13d3b9faa7e6d3fc630cba6534 Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Mon, 17 Feb 2014 06:32:30 +1100
+Subject: [PATCH 02/26] Commit by hyperbolic2346
+ https://github.com/hyperbolic2346/motion/commit/90b81c05baba3f4d6b33302d72eeb44f5532311d
+ Some bug fixing related to vulnerabilities listed here:
+ http://packetstormsecurity.com/files/122171/Motion-3.2.12-XSS-CSRF-Buffer-Overflow-SQL-Injection.html
+
+---
+ conf.c     | 40 ++++++++++++++++++++++++----------------
+ logger.c   | 13 +++++++++++--
+ webhttpd.c |  5 ++---
+ 3 files changed, 37 insertions(+), 21 deletions(-)
+
+diff --git a/conf.c b/conf.c
+index 2da0da6..26585ee 100644
+--- a/conf.c
++++ b/conf.c
+@@ -1569,17 +1569,23 @@ static void conf_cmdline(struct context *cnt, int thread)
+                 cnt->log_level = (unsigned int)atoi(optarg);
+             break;
+         case 'k':
+-            if (thread == -1)
+-                strcpy(cnt->log_type_str, optarg);
+-            break;
++	  if (thread == -1) {
++	    strncpy(cnt->log_type_str, optarg, sizeof(cnt->log_type_str) - 1);
++	    cnt->log_type_str[sizeof(cnt->log_type_str) - 1] = '\0';
++	  }
++	  break;
+         case 'p':
+-            if (thread == -1)
+-                strcpy(cnt->pid_file, optarg);
+-            break;
++	  if (thread == -1) {
++	    strncpy(cnt->pid_file, optarg, sizeof(cnt->pid_file) - 1);
++	    cnt->pid_file[sizeof(cnt->pid_file) - 1] = '\0';
++	  }
++	  break;
+         case 'l':
+-            if (thread == -1)
+-                strcpy(cnt->log_file, optarg);
+-            break;
++	  if (thread == -1) {
++	    strncpy(cnt->log_file, optarg, sizeof(cnt->log_file) - 1);
++	    cnt->log_file[sizeof(cnt->log_file) - 1] = '\0';
++	  }
++	  break;
+         case 'm':
+             cnt->pause = 1;
+             break;    
+@@ -1868,8 +1874,9 @@ struct context **conf_load(struct context **cnt)
+     conf_cmdline(cnt[0], -1);
+ 
+     if (cnt[0]->conf_filename[0]) { /* User has supplied filename on Command-line. */
+-        strcpy(filename, cnt[0]->conf_filename);
+-        fp = fopen (filename, "r");
++      strncpy(filename, cnt[0]->conf_filename, PATH_MAX-1);
++      filename[PATH_MAX-1] = '\0';
++      fp = fopen (filename, "r");
+     }
+ 
+     if (!fp) {  /* Command-line didn't work, try current dir. */
+@@ -1905,11 +1912,12 @@ struct context **conf_load(struct context **cnt)
+ 
+     /* Now we process the motion.conf config file and close it. */
+     if (fp) {
+-        strcpy(cnt[0]->conf_filename, filename);
+-        MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO, "%s: Processing thread 0 - config file %s",
+-                   filename);
+-        cnt = conf_process(cnt, fp);
+-        myfclose(fp);
++      strncpy(cnt[0]->conf_filename, filename, sizeof(cnt[0]->conf_filename) - 1);
++      cnt[0]->conf_filename[sizeof(cnt[0]->conf_filename) - 1] = '\0';
++      MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO, "%s: Processing thread 0 - config file %s",
++		 filename);
++      cnt = conf_process(cnt, fp);
++      myfclose(fp);
+     } else {
+         MOTION_LOG(CRT, TYPE_ALL, NO_ERRNO, "%s: Not config file to process using default values");
+     }
+diff --git a/logger.c b/logger.c
+index f76d2a3..b2e4231 100644
+--- a/logger.c
++++ b/logger.c
+@@ -212,11 +212,20 @@ void motion_log(int level, unsigned int type, int errno_flag, const char *fmt, .
+     /* Next add the user's message. */
+     va_start(ap, fmt);
+     n += vsnprintf(buf + n, sizeof(buf) - n, fmt, ap);
++    buf[1023] = '\0';
+ 
+     /* If errno_flag is set, add on the library error message. */
+     if (errno_flag) {
+-        strncat(buf, ": ", 1024 - strlen(buf));
+-        n += 2;
++      size_t buf_len = strlen(buf);
++      
++      // just knock off 10 characters if we're that close...
++      if (buf_len + 10 > 1024) {
++	buf[1024 - 10] = '\0';
++	buf_len = 1024 - 10;
++      }
++
++      strncat(buf, ": ", 1024 - buf_len);
++      n += 2;
+         /*
+          * This is bad - apparently gcc/libc wants to use the non-standard GNU
+          * version of strerror_r, which doesn't actually put the message into
+diff --git a/webhttpd.c b/webhttpd.c
+index 20fe4e8..0bd0914 100644
+--- a/webhttpd.c
++++ b/webhttpd.c
+@@ -370,9 +370,8 @@ static void url_decode(char *urlencoded, size_t length)
+                 *urldecoded++ = c[1];
+             }
+ 
+-        } else if (*data == '+') {
+-            *urldecoded++ = ' ';
+-
++	} else if (*data == '<' || *data == '+' || data == '>') {
++	  *urldecoded++ = ' ';
+         } else {
+             *urldecoded++ = *data;
+         }
+-- 
+1.8.1.4
+

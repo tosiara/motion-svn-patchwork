@@ -1,0 +1,25 @@
+From 638286b12dfdab6c810ec3fc853bffb5c84a09a4 Mon Sep 17 00:00:00 2001
+From: Takami Torao <koiroha@gmail.com>
+Date: Sat, 19 Apr 2014 06:18:10 +0900
+Subject: [PATCH 09/26] remove redundant prefix -- from boundary
+
+---
+ stream.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/stream.c b/stream.c
+index 1ed082a..624b92b 100644
+--- a/stream.c
++++ b/stream.c
+@@ -955,7 +955,7 @@ static void stream_add_client(struct stream *list, int sc)
+                                  "Cache-Control: no-cache, private\r\n"
+                                  "Pragma: no-cache\r\n"
+                                  "Content-Type: multipart/x-mixed-replace; "
+-                                 "boundary=--BoundaryString\r\n\r\n";
++                                 "boundary=BoundaryString\r\n\r\n";
+ 
+     memset(new, 0, sizeof(struct stream));
+     new->socket = sc;
+-- 
+1.8.1.4
+

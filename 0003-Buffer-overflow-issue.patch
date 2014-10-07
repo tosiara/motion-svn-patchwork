@@ -1,0 +1,29 @@
+From 311fa4ee3105a6739b867223121fa6a4f6001dfb Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Mon, 17 Feb 2014 06:45:23 +1100
+Subject: [PATCH 03/26] Buffer overflow issue
+
+---
+ motion.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/motion.c b/motion.c
+index d238473..ceaa44d 100644
+--- a/motion.c
++++ b/motion.c
+@@ -2714,8 +2714,12 @@ int main (int argc, char **argv)
+             cnt_list[i]->threadnr = i ? i : 1;
+ 
+             if (strcmp(cnt_list[i]->conf_filename, ""))
++            {
++                cnt_list[i]->conf_filename[sizeof(cnt_list[i]->conf_filename) - 1] = '\0';
++
+                 MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO, "%s: Thread %d is from %s", 
+                            cnt_list[i]->threadnr, cnt_list[i]->conf_filename);
++            }
+ 
+             MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO, "%s: Thread %d is device: %s input %d", 
+                        cnt_list[i]->threadnr, cnt_list[i]->conf.netcam_url ? 
+-- 
+1.8.1.4
+

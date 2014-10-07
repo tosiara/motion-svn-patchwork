@@ -1,0 +1,45 @@
+From 16c1a400afbdffc1adb20f0859466036ee117048 Mon Sep 17 00:00:00 2001
+From: Alfred Klomp <git@alfredklomp.com>
+Date: Fri, 2 May 2014 10:49:50 +0200
+Subject: [PATCH 07/26] bugfix: motion.c: calculate proper allocation size
+
+The proper idiom for calculating the size for memory allocation is:
+
+  ptr = malloc(sizeof(*ptr));
+
+The sizeof() dereferences the pointer's type, and allocates enough
+memory to store an instance of that type. motion.c was using this idiom:
+
+  ptr = malloc(sizeof(ptr));
+
+This is incorrect, but thankfully fairly harmless in practice since the
+pointer type is usually quite large. Change this to the proper idiom.
+---
+ motion.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/motion.c b/motion.c
+index b650510..fc48e64 100644
+--- a/motion.c
++++ b/motion.c
+@@ -723,13 +723,13 @@ static int motion_init(struct context *cnt)
+     memset(cnt->imgs.out, 0, cnt->imgs.size);
+ 
+     /* contains the moving objects of ref. frame */
+-    cnt->imgs.ref_dyn = mymalloc(cnt->imgs.motionsize * sizeof(cnt->imgs.ref_dyn));
++    cnt->imgs.ref_dyn = mymalloc(cnt->imgs.motionsize * sizeof(*cnt->imgs.ref_dyn));
+     cnt->imgs.image_virgin = mymalloc(cnt->imgs.size);
+     cnt->imgs.smartmask = mymalloc(cnt->imgs.motionsize);
+     cnt->imgs.smartmask_final = mymalloc(cnt->imgs.motionsize);
+-    cnt->imgs.smartmask_buffer = mymalloc(cnt->imgs.motionsize * sizeof(cnt->imgs.smartmask_buffer));
+-    cnt->imgs.labels = mymalloc(cnt->imgs.motionsize * sizeof(cnt->imgs.labels));
+-    cnt->imgs.labelsize = mymalloc((cnt->imgs.motionsize/2+1) * sizeof(cnt->imgs.labelsize));
++    cnt->imgs.smartmask_buffer = mymalloc(cnt->imgs.motionsize * sizeof(*cnt->imgs.smartmask_buffer));
++    cnt->imgs.labels = mymalloc(cnt->imgs.motionsize * sizeof(*cnt->imgs.labels));
++    cnt->imgs.labelsize = mymalloc((cnt->imgs.motionsize/2+1) * sizeof(*cnt->imgs.labelsize));
+ 
+     /* Set output picture type */
+     if (!strcmp(cnt->conf.picture_type, "ppm"))
+-- 
+1.8.1.4
+

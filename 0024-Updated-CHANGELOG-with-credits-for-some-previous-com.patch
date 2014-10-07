@@ -1,0 +1,28 @@
+From 0e6dbeecc08450451cb0978ee78d1d3219d5921f Mon Sep 17 00:00:00 2001
+From: tos <tosiara@users.noreply.github.com>
+Date: Tue, 24 Jun 2014 21:50:55 +0300
+Subject: [PATCH 24/26] Updated CHANGELOG with credits for some previous
+ commits
+
+---
+ CHANGELOG | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/CHANGELOG b/CHANGELOG
+index 688b9db..6a2c247 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -50,6 +50,10 @@ Features
+    * Added support for ffmpeg 0.11 new API.
+    * Added RSTP support for netcam ( merge https://github.com/hyperbolic2346/motion )
+    * Merge tosiara/rtsp branch (commit 46cfcf31d, 2014/05/21) (Mr-Dave)
++     * 3fps bugfix from SVN rev559 (tosiara, Joerg Weber)
++     * Buffer overflow vulnerabilities (hyperbolic2346)
++     * Redundand -- boundary prefix (torao)
++     * Proper size for memset and allocation size (Alfred Klomp) 
+    * Removed compiler warnings:  (Mr-Dave)
+        logger.c,jpegutils.c,netcam_ftp.c,track.c,
+        picture.c,webhttpd.c,stream.c,ffmpeg.c
+-- 
+1.8.1.4
+

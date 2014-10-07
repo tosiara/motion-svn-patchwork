@@ -1,0 +1,884 @@
+From 54c078527f8a103c042d0a1015f6712970c705c2 Mon Sep 17 00:00:00 2001
+From: Dave <zz4077@comcast.net>
+Date: Thu, 19 Jun 2014 20:17:20 -0600
+Subject: [PATCH 18/26] Added support for libav V53
+
+---
+ CHANGELOG     |  12 +++-
+ INSTALL       |  72 +++++++++++-----------
+ configure.ac  |  34 ++++++++++-
+ ffmpeg.c      | 193 +++++++++++-----------------------------------------------
+ ffmpeg.h      |   3 +
+ netcam.c      |  21 +++----
+ netcam_rtsp.c | 110 ++++++++++++---------------------
+ 7 files changed, 163 insertions(+), 282 deletions(-)
+ mode change 100644 => 100755 CHANGELOG
+ mode change 100644 => 100755 INSTALL
+ mode change 100644 => 100755 configure.ac
+ mode change 100644 => 100755 ffmpeg.c
+ mode change 100644 => 100755 ffmpeg.h
+ mode change 100644 => 100755 netcam.c
+ mode change 100644 => 100755 netcam_rtsp.c
+
+diff --git a/CHANGELOG b/CHANGELOG
+old mode 100644
+new mode 100755
+index e549f02..6313087
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -60,9 +60,15 @@ Features
+    * Revised INSTALL with samples(Mr-Dave)
+    * Revisions for RTSP and code standard.(Mr-Dave)
+    * Plugged most(?) memory leaks in RTSP. (Mr-Dave)
+-   * Undo changes caused by code editor and other unnecessary changes
+-   * Moved call to netcam_shutdown_rtsp into netcam_cleanup where it belongs.
+-   * Regession fix for memory leaks and reconnection
++   * Undo changes caused by code editor and other unnecessary changes (Mr-Dave)
++   * Moved call to netcam_shutdown_rtsp into netcam_cleanup where it belongs. (Mr-Dave)
++   * Regession fix for memory leaks and reconnection (Mr-Dave)
++   * Eliminated requirement to manually build FFMPEG for RTSP support. (Mr-Dave)
++   * Revised RTSP to support version 53 of libavformat (Mr-Dave)
++   * Revised FFMPEG.c to eliminate warnings and functions no longer supported by Libav/FFMPEG(Mr-Dave)
++   * Revised INSTALL to have sample PI configure option.(Mr-Dave)
++   * Revised configure.ac to generate compiler flag AVFMT_V53.(Mr-Dave)
++   * Revised INSTALL to indicate standard APT packages for RTSP (Mr-Dave)
+ 
+    
+ Bugfixes
+diff --git a/INSTALL b/INSTALL
+old mode 100644
+new mode 100755
+index 8f49abd..fba3f71
+--- a/INSTALL
++++ b/INSTALL
+@@ -1,36 +1,36 @@
+-Required Packages:
+-    sudo apt-get install autoconf automake build-essential libjpeg-turbo8-dev libzip-dev
+-
+-Obtain source code (via git)
+-    sudo apt-get install git
+-    cd ~
+-    git clone {https://github.com/your favorite fork}
+-
+-To rebuild the motion configure file use
+-    autoreconf
+-
+-Optional: With FFMPEG support:
+-    Build FFMPEG via their instructions
+-
+-    Change to location of the motion source code
+-    cd ~/motion
+-
+-    Configure with manually built ffmpeg which installs to ~/bin and ~/ffmpeg_build
+-        Basic
+-            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include
+-
+-        With extra libraries for ffmpeg  IMPORTANT NOTE:  Your libraries will vary depending upon your build of FFMPEG
+-            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
+-
+-        With extra libraries for ffmpeg and install to ~/motion_build
+-            ./configure --prefix=$HOME/motion_build --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
+-
+-With APT versions of ffmpeg libraries
+-    sudo apt-get install libavformat-dev libavcodec-dev
+-
+-Without any FFMPEG support or just any installed version of FFMPEG
+-    ./configure
+-
+-Once configured type:
+-    make
+-    make install
++Required Packages:
++    sudo apt-get install autoconf automake build-essential libtool libjpeg8-dev libzip-dev
++
++Obtain source code (via git)
++    sudo apt-get install git
++    cd ~
++    git clone {https://github.com/your favorite fork}
++
++To rebuild the motion configure file use
++    autoreconf
++
++Optional: With FFMPEG support:
++    Build FFMPEG via their instructions
++    Configure with manually built ffmpeg which currently installs to ~/bin and ~/ffmpeg_build
++        Basic
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include
++
++        With extra libraries for ffmpeg  IMPORTANT NOTE:  Your libraries will vary depending upon your build of FFMPEG
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++        With extra libraries for ffmpeg and install to ~/motion_build
++            ./configure --prefix=$HOME/motion_build --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++With LIBAV APT versions of libraries
++    sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libav-tools
++
++Without any LIBAV/FFMPEG support or the installed version of libavcodec/libavformat
++    ./configure
++
++Sample PI configuration with LIBAV
++    ./configure --with-ffmpeg=/usr/lib/arm-linux-gnueabihf --with-ffmpeg-headers=/usr/include
++
++
++Once configured type:
++    make
++    make install
+diff --git a/configure.ac b/configure.ac
+old mode 100644
+new mode 100755
+index ad54e6b..f25b40d
+--- a/configure.ac
++++ b/configure.ac
+@@ -441,6 +441,11 @@ else if test "${FFMPEG_DIR}" = "yes"; then
+         FFMPEG_OK="found"
+         FFMPEG_LIB="/usr/lib/x86_64-linux-gnu"
+         FFMPEG_DIR="/usr"
++	elif test -f /usr/lib/i386-linux-gnu/libavcodec.a -o -f /usr/lib/i386-linux-gnu/libavcodec.so && test /usr/lib/i386-linux-gnu/libavformat.a -o -f /usr/lib/i386-linux-gnu/libavformat.so ; then
++        AC_MSG_RESULT(found in /usr/lib/i386-linux-gnu)
++        FFMPEG_OK="found"
++        FFMPEG_LIB="/usr/lib/i386-linux-gnu"
++        FFMPEG_DIR="/usr"	
+ 	else
+ 		AC_MSG_RESULT(not found)
+ 		echo ""
+@@ -551,7 +556,7 @@ if test "${FFMPEG_OK}" = "found"; then
+         FFMPEG_OBJ="ffmpeg.o"
+         AC_SUBST(FFMPEG_OBJ)
+ 
+-        AC_MSG_CHECKING(avformat)
++        AC_MSG_CHECKING(avformat version 55)
+         AC_RUN_IFELSE([AC_LANG_SOURCE([
+             [
+              #include <${AVFORMAT_DIR}>
+@@ -560,15 +565,38 @@ if test "${FFMPEG_OK}" = "found"; then
+                  return 0;
+              }
+             ]])],
+-            [AC_MSG_RESULT(version previous to 55)],
++            [            
++            AC_MSG_RESULT(no)
++            AC_MSG_CHECKING(avformat version 53)
++            AC_RUN_IFELSE([AC_LANG_SOURCE([
++            [
++             #include <${AVFORMAT_DIR}>
++             int main(void){
++                 if (LIBAVFORMAT_VERSION_MAJOR = 53) return -1;
++                 return 0;
++             }
++            ]])],
++            [AC_MSG_RESULT(no)],
+             [
+-             AC_MSG_RESULT(version 55 or higher)
++             AC_MSG_RESULT(yes)
++             TEMP_CFLAGS="${TEMP_CFLAGS} -DAVFMT_V53"
++             RTPS_OBJ="netcam_rtsp.o"
++             AC_SUBST(RTPS_OBJ)
++            ]
++            )
++            ],
++            [
++             AC_MSG_RESULT( yes version 55 or higher)
+              TEMP_CFLAGS="${TEMP_CFLAGS} -DFFMPEG_V55"
+              RTPS_OBJ="netcam_rtsp.o"
+              AC_SUBST(RTPS_OBJ)
+             ]
+         )
+ 
++        
++
++
++
+         AC_MSG_CHECKING([file_protocol is defined in ffmpeg ?])
+         saved_CFLAGS=$CFLAGS
+         saved_LIBS=$LIBS
+diff --git a/ffmpeg.c b/ffmpeg.c
+old mode 100644
+new mode 100755
+index 611e11e..492fe8e
+--- a/ffmpeg.c
++++ b/ffmpeg.c
+@@ -14,7 +14,7 @@
+ 
+ #include "ffmpeg.h"
+ #include "motion.h"
+-
++ 
+ #if LIBAVCODEC_BUILD > 4680
+ /*
+  * FFmpeg after build 4680 doesn't have support for mpeg1 videos with
+@@ -150,89 +150,37 @@ URLProtocol mpeg1_file_protocol = {
+ #include "avstring.h"
+ #endif
+ 
+-/**
+- * file_open
+- *
+- */
+-static int file_open(URLContext *h, const char *filename, int flags)
+-{
+-    const char *mode;
+-    FILE *fh;
+-    size_t bufsize = 0;
+-
+-    av_strstart(filename, "file:", &filename);
+-
+-    if (flags & URL_RDWR) {
+-        mode = "wb+";
+-        bufsize = BUFSIZE_1MEG;
+-    } else if (flags & URL_WRONLY) {
+-        mode = "wb";
+-        bufsize = BUFSIZE_1MEG;
+-    } else {
+-        mode = "rb";
+-    }
+-    fh = myfopen(filename, mode, bufsize);
+-    if (fh == NULL)
+-        return AVERROR(ENOENT);
+-    h->priv_data = (void *)fh;
+-    return 0;
+-}
+-
+-/**
+- * file_read
+- */
+-static int file_read(URLContext *h, unsigned char *buf, int size)
+-{
+-    FILE *fh = (FILE *)h->priv_data;
+-    return fread(buf, 1, size, fh);
+-}
+-
+-/**
+- * file_write
+- */
+-static int file_write(URLContext *h, unsigned char *buf, int size)
+-{
+-    FILE *fh = (FILE *)h->priv_data;
+-    return fwrite(buf, 1, size, fh);
+-}
+-
+-/**
+- * file_seek
+- */
+-static int64_t file_seek(URLContext *h, int64_t pos, int whence)
+-{
+-    FILE *fh = (FILE *)h->priv_data;
+-    if (fseek(fh, pos, whence))
+-        return -1;
+-    return ftell(fh);
+-}
++#endif // HAVE_FFMPEG_NEW
+ 
+-/**
+- * file_close
+- */
+-static int file_close(URLContext *h)
+-{
+-    FILE *fh = (FILE *)h->priv_data;
+-    return myfclose(fh);
++#endif // FF_API_NEW_AVIO
++/****************************************************************************
++ *  The section below is the "my" section of functions.  
++ *  These are designed to be extremely simple version specific 
++ *  variants of the libav functions.
++ ****************************************************************************/
++AVFrame *my_frame_alloc(void){
++    AVFrame *pic;
++#ifdef FFMPEG_V55
++    pic = av_frame_alloc();
++#else
++    pic = avcodec_alloc_frame();
++#endif
++    return pic;
+ }
+ 
+-URLProtocol file_protocol = {
+-    "file",
+-    file_open,
+-    file_read,
+-    file_write,
+-    file_seek,
+-    file_close,
+-#if LIBAVFORMAT_BUILD >= (52<<16 | 31<<8)
+-    NULL,
+-    NULL,
+-    NULL,
++void my_frame_free(AVFrame *frame){    
++#ifdef FFMPEG_V55
++    av_frame_free(&frame);
++#else
++    //avcodec_free_frame(&frame);
++    //av_frame_free(&netcam->rtsp->frame);
++    av_freep(&frame);
+ #endif
+-};
+-
+-#endif // HAVE_FFMPEG_NEW
++}
+ 
+-#endif // FF_API_NEW_AVIO
++/****************************************************************************
++ ****************************************************************************
++ ****************************************************************************/
+ 
+ /**
+  * mpeg1_write_trailer
+@@ -244,16 +192,8 @@ URLProtocol file_protocol = {
+  */
+ static int mpeg1_write_trailer(AVFormatContext *s)
+ {
+-#if defined FF_API_NEW_AVIO
+     avio_write(s->pb, mpeg1_trailer, 4);
+     avio_flush(s->pb);
+-#elif LIBAVFORMAT_BUILD >= (52<<16)
+-    put_buffer(s->pb, mpeg1_trailer, 4);
+-    put_flush_packet(s->pb);
+-#else
+-    put_buffer(&s->pb, mpeg1_trailer, 4);
+-    put_flush_packet(&s->pb);
+-#endif /* FF_API_NEW_AVIO -- LIBAVFORMAT_BUILD >= (52<<16) */
+ 
+     return 0; /* success */
+ }
+@@ -277,26 +217,6 @@ void ffmpeg_init()
+     av_log_set_level(AV_LOG_ERROR);
+ #endif
+ 
+-#if defined FF_API_NEW_AVIO
+-#else
+-    /*
+-     * Copy the functions to use for the append file protocol from the standard
+-     * file protocol.
+-     */
+-    mpeg1_file_protocol.url_read  = file_protocol.url_read;
+-    mpeg1_file_protocol.url_write = file_protocol.url_write;
+-    mpeg1_file_protocol.url_seek  = file_protocol.url_seek;
+-    mpeg1_file_protocol.url_close = file_protocol.url_close;
+-
+-/* Register the append file protocol. */
+-#ifdef FFMPEG_V55
+-    av_register_protocol2(&mpeg1_file_protocol, sizeof(mpeg1_file_protocol));
+-#else
+-    av_register_protocol(&mpeg1_file_protocol);
+-#endif
+-
+-#endif // FF_API_NEW_AVIO
+-
+ }
+ 
+ /**
+@@ -458,7 +378,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     snprintf(ffmpeg->codec, sizeof(ffmpeg->codec), "%s", ffmpeg_video_codec);
+ 
+     /* Allocation the output media context. */
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     ffmpeg->oc = avformat_alloc_context();
+ #else
+     ffmpeg->oc = av_alloc_format_context();
+@@ -483,11 +403,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     /* Create a new video stream and initialize the codecs. */
+     ffmpeg->video_st = NULL;
+     if (ffmpeg->oc->oformat->video_codec != CODEC_ID_NONE) {
+-#if defined FF_API_NEW_AVIO 
+         ffmpeg->video_st = avformat_new_stream(ffmpeg->oc, NULL /* Codec */);
+-#else
+-        ffmpeg->video_st = av_new_stream(ffmpeg->oc, 0);
+-#endif
+         if (!ffmpeg->video_st) {
+             MOTION_LOG(ERR, TYPE_ENCODER, SHOW_ERRNO, "%s: av_new_stream - could"
+                        " not alloc stream");
+@@ -549,18 +465,6 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+         c->flags |= CODEC_FLAG_GLOBAL_HEADER;
+     }
+ 
+-#if defined FF_API_NEW_AVIO
+-// pass the options to avformat_write_header directly
+-#else
+-    /* Set the output parameters (must be done even if no parameters). */
+-    if (av_set_parameters(ffmpeg->oc, NULL) < 0) {
+-        MOTION_LOG(ERR, TYPE_ENCODER, NO_ERRNO, "%s: av_set_parameters error:"
+-                   " Invalid output format parameters");
+-        ffmpeg_cleanups(ffmpeg);
+-        return NULL;
+-    }
+-#endif
+-
+     /* Dump the format settings.  This shows how the various streams relate to each other. */
+     //dump_format(ffmpeg->oc, 0, filename, 1);
+ 
+@@ -584,11 +488,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     pthread_mutex_lock(&global_lock);
+ 
+     /* Open the codec */
+-#if defined FF_API_NEW_AVIO
+     ret = avcodec_open2(c, codec, NULL /* options */ );
+-#else
+-    ret = avcodec_open(c, codec);
+-#endif
+ 
+     if (ret < 0) {
+         /* Release the lock. */
+@@ -615,11 +515,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     }
+ 
+     /* Allocate the encoded raw picture. */
+-#ifdef FFMPEG_V55
+-    ffmpeg->picture = av_frame_alloc();
+-#else
+-    ffmpeg->picture = avcodec_alloc_frame();
+-#endif
++    ffmpeg->picture = my_frame_alloc();
+ 
+     if (!ffmpeg->picture) {
+         MOTION_LOG(ERR, TYPE_ENCODER, NO_ERRNO, "%s: avcodec_alloc_frame -"
+@@ -659,11 +555,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+             snprintf(file_proto, sizeof(file_proto), "%s", filename);
+ 
+ 
+-#if defined FF_API_NEW_AVIO
+         if (avio_open(&ffmpeg->oc->pb, file_proto, URL_WRONLY) < 0) {
+-#else
+-        if (url_fopen(&ffmpeg->oc->pb, file_proto, URL_WRONLY) < 0) {
+-#endif
+             /* Path did not exist? */
+             if (errno == ENOENT) {
+                 /* Create path for file (don't use file_proto)... */
+@@ -672,12 +564,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+                     return NULL;
+                 }
+ 
+-#if defined FF_API_NEW_AVIO
+                 if (avio_open(&ffmpeg->oc->pb, file_proto, URL_WRONLY) < 0) {
+-#else
+-                /* And retry opening the file (use file_proto). */
+-                if (url_fopen(&ffmpeg->oc->pb, file_proto, URL_WRONLY) < 0) {
+-#endif
+                     MOTION_LOG(ERR, TYPE_ENCODER, SHOW_ERRNO, "%s: url_fopen -"
+                                " error opening file %s", filename);
+                     ffmpeg_cleanups(ffmpeg);
+@@ -701,11 +588,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     }
+ 
+     /* Write the stream header, if any. */
+-#if defined FF_API_NEW_AVIO
+     avformat_write_header(ffmpeg->oc, NULL);
+-#else
+-    av_write_header(ffmpeg->oc);
+-#endif // FF_API_NEW_AVIO
+     return ffmpeg;
+ }
+ 
+@@ -773,13 +656,7 @@ void ffmpeg_close(struct ffmpeg *ffmpeg)
+ 
+     if (!(ffmpeg->oc->oformat->flags & AVFMT_NOFILE)) {
+         /* Close the output file. */
+-#if defined FF_API_NEW_AVIO
+         avio_close(ffmpeg->oc->pb);
+-#elif LIBAVFORMAT_BUILD >= (52<<16)
+-        url_fclose(ffmpeg->oc->pb);
+-#else
+-        url_fclose(&ffmpeg->oc->pb);
+-#endif /* FF_API_NEW_AVIO -- LIBAVFORMAT_BUILD >= (52<<16) */
+     }
+ 
+ 
+@@ -840,7 +717,7 @@ int ffmpeg_put_other_image(struct ffmpeg *ffmpeg, unsigned char *y,
+  */
+ int ffmpeg_put_frame(struct ffmpeg *ffmpeg, AVFrame *pic)
+ {
+-    int out_size, ret, got_packet_ptr;
++    int out_size, ret;
+ 
+ #ifdef FFMPEG_AVWRITEFRAME_NEWAPI
+     AVPacket pkt;
+@@ -867,6 +744,8 @@ int ffmpeg_put_frame(struct ffmpeg *ffmpeg, AVFrame *pic)
+     } else {
+         /* Encodes the image. */
+ #if defined FF_API_NEW_AVIO
++
++        int got_packet_ptr;
+         pkt.data = ffmpeg->video_outbuf;
+         pkt.size = ffmpeg->video_outbuf_size;
+ 
+@@ -936,11 +815,7 @@ AVFrame *ffmpeg_prepare_frame(struct ffmpeg *ffmpeg, unsigned char *y,
+ {
+     AVFrame *picture;
+ 
+-#ifdef FFMPEG_V55
+-    picture = av_frame_alloc();
+-#else
+-    picture = avcodec_alloc_frame();
+-#endif
++    picture = my_frame_alloc();
+ 
+     if (!picture) {
+         MOTION_LOG(ERR, TYPE_ENCODER, SHOW_ERRNO, "%s: Could not alloc frame");
+@@ -989,7 +864,7 @@ void ffmpeg_deinterlace(unsigned char *img, int width, int height)
+     picture.linesize[2] = width2;
+ 
+     /* We assume using 'PIX_FMT_YUV420P' always */
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Deinterlace depreciated for recent versions of FFMPEG.");
+ #else
+     avpicture_deinterlace(&picture, &picture, PIX_FMT_YUV420P, width, height);
+diff --git a/ffmpeg.h b/ffmpeg.h
+old mode 100644
+new mode 100755
+index a1e2e9d..86f4ec9
+--- a/ffmpeg.h
++++ b/ffmpeg.h
+@@ -95,4 +95,7 @@ void ffmpeg_deinterlace(unsigned char *, int, int);
+ /* Setup an avcodec log handler. */
+ void ffmpeg_avcodec_log(void *, int, const char *, va_list);
+ 
++AVFrame *my_frame_alloc(void);
++void my_frame_free(AVFrame *frame);
++
+ #endif /* _INCLUDE_FFMPEG_H_ */
+diff --git a/netcam.c b/netcam.c
+old mode 100644
+new mode 100755
+index 8c269ec..843bc8f
+--- a/netcam.c
++++ b/netcam.c
+@@ -45,7 +45,7 @@
+ #include <sys/socket.h>
+ 
+ #include "netcam_ftp.h"
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+ #include "netcam_rtsp.h"
+ #endif
+ 
+@@ -149,7 +149,7 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+ {
+     char *s;
+     int i;
+-#ifdef FFMPEG_V55    
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     const char *re = "(http|ftp|mjpg|rtsp)://(((.*):(.*))@)?"
+                      "([^/:]|[-.a-z0-9]+)(:([0-9]+))?($|(/[^:]*))";
+ #else
+@@ -211,7 +211,7 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+             parse_url->port = 80;
+         else if (!strcmp(parse_url->service, "ftp"))
+             parse_url->port = 21;
+-#ifdef FFMPEG_V55            
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+         else if (!strcmp(parse_url->service, "rtsp") && parse_url->port == 0)
+             parse_url->port = 554;
+ #endif            
+@@ -2018,7 +2018,7 @@ static void *netcam_handler_loop(void *arg)
+             }
+         }
+         
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+         if (netcam->caps.streaming == NCS_RTSP) {
+             if (netcam->rtsp->format_context == NULL) {      // We must have disconnected.  Try to reconnect
+                 MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Attempting to reconnect");
+@@ -2433,7 +2433,7 @@ static int netcam_setup_ftp(netcam_context_ptr netcam, struct url_t *url)
+     return 0;
+ }
+ 
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+ {
+   struct context *cnt = netcam->cnt;
+@@ -2518,7 +2518,6 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+      */
+     ret = rtsp_connect(netcam);
+     if (ret < 0){
+-        netcam_shutdown_rtsp(netcam);
+         return ret;
+     }
+ 
+@@ -2708,8 +2707,8 @@ void netcam_cleanup(netcam_context_ptr netcam, int init_retry_flag)
+     if (netcam->response != NULL) 
+         free(netcam->response);
+ 
+-#ifdef FFMPEG_V55
+-    if (netcam->caps.streaming == NCS_RTSP)
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++    if ((netcam->caps.streaming == NCS_RTSP) && (netcam->rtsp->connected == 1))
+         netcam_shutdown_rtsp(netcam);
+ #endif
+ 
+@@ -2945,7 +2944,7 @@ int netcam_start(struct context *cnt)
+ 
+         strcpy(url.service, "http"); /* Put back a real URL service. */
+         retval = netcam_setup_mjpg(netcam, &url);
+-#ifdef FFMPEG_V55        
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     } else if ((url.service) && (!strcmp(url.service, "rtsp"))) {
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: now calling"
+                     " netcam_setup_rtsp()");
+@@ -2975,7 +2974,7 @@ int netcam_start(struct context *cnt)
+         return -1;
+     }
+ 
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     if (netcam->caps.streaming != NCS_RTSP) {
+ #endif
+         /*
+@@ -3008,7 +3007,7 @@ int netcam_start(struct context *cnt)
+                        " is not modulo 8", netcam->height);
+             return -3;
+         }
+-#ifdef FFMPEG_V55        
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+     } else {
+         // not jpeg, get the dimensions
+         netcam->width = netcam->rtsp->codec_context->width;
+diff --git a/netcam_rtsp.c b/netcam_rtsp.c
+old mode 100644
+new mode 100755
+index a209cad..6748a4f
+--- a/netcam_rtsp.c
++++ b/netcam_rtsp.c
+@@ -2,11 +2,9 @@
+ #include "netcam_rtsp.h"
+ #include "motion.h"
+ 
+-#ifdef FFMPEG_V55
++#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+ 
+-/*  Only recent versions of FFMPEG are supported since
+- *  no documentation on how to code the old versions exist
+- */
++#include "ffmpeg.h"
+ 
+ /****************************************************
+  * Duplicated static functions - FIXME
+@@ -58,8 +56,10 @@ static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+ static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *frame, AVCodecContext *cc)
+ {
+     int check = 0;
+-    int ret = avcodec_decode_video2(cc, frame, &check, packet);
+-
++    int frame_size = 0;
++    int ret = 0; 
++    
++    ret = avcodec_decode_video2(cc, frame, &check, packet);
+     if (ret < 0) {
+         MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error decoding video packet");
+         return 0;
+@@ -70,14 +70,12 @@ static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *fram
+         return 0;
+     }
+ 
+-    int frame_size = av_image_get_buffer_size(cc->pix_fmt, cc->width, cc->height, 1);
+-
+-    /* Assure there's enough room in the buffer. */
++    frame_size = avpicture_get_size(cc->pix_fmt, cc->width, cc->height);
++    
+     netcam_check_buffsize(buffer, frame_size);
+-
+-    av_image_copy_to_buffer((uint8_t *)buffer->ptr, frame_size,
+-			  (const uint8_t **)(frame->data), frame->linesize,
+-			  cc->pix_fmt, cc->width, cc->height, 1);
++    
++    avpicture_layout((const AVPicture*)frame,cc->pix_fmt,cc->width,cc->height
++                    ,(unsigned char *)buffer->ptr,frame_size );    
+ 
+     buffer->used = frame_size;
+ 
+@@ -92,7 +90,7 @@ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AV
+     AVCodec *dec = NULL;
+     ret = av_find_best_stream(fmt_ctx, type, -1, -1, NULL, 0);
+     if (ret < 0) {
+-		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream %s in input!", av_get_media_type_string(type));
++		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream %s in input!", type);
+         return ret;
+     } else {
+         *stream_idx = ret;
+@@ -101,11 +99,11 @@ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AV
+         dec_ctx = st->codec;
+         dec = avcodec_find_decoder(dec_ctx->codec_id);
+         if (!dec) {
+-    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to find %s codec!", av_get_media_type_string(type));
++    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to find %s codec!", type);
+             return ret;
+         }
+         if ((ret = avcodec_open2(dec_ctx, dec, NULL)) < 0) {
+-    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to open %s codec!", av_get_media_type_string(type));
++    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to open %s codec!", type);
+             return ret;
+         }
+     }
+@@ -136,7 +134,7 @@ struct rtsp_context *rtsp_new_context(void)
+     return ret;
+ }
+ 
+-static int decode_interrupt_cb(void *ctx)
++static int interrupt_cb(void *ctx)
+ {
+     struct rtsp_context *rtsp = (struct rtsp_context *)ctx;
+ 
+@@ -158,33 +156,34 @@ static int decode_interrupt_cb(void *ctx)
+     //should not be possible to get here
+     return 0;
+ }
+-
+-
+ int rtsp_connect(netcam_context_ptr netcam)
+ {
+ 
+-    int ret;
+-
++    int ret;    
++    char errstr[128];
++    
++    netcam->rtsp->connected = 0;
++    
+     if (netcam->rtsp->path == NULL) {
+         MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Null path passed to connect (%s)", netcam->rtsp->path);
+         return -1;
+     }
+ 
+-
+     // open the network connection
+     AVDictionary *opts = 0;
+     av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+ 
+     netcam->rtsp->format_context = avformat_alloc_context();
+-    netcam->rtsp->format_context->interrupt_callback.callback = decode_interrupt_cb;
++    netcam->rtsp->format_context->interrupt_callback.callback = interrupt_cb;
+     netcam->rtsp->format_context->interrupt_callback.opaque = netcam->rtsp;
+ 
+     ret = avformat_open_input(&netcam->rtsp->format_context, netcam->rtsp->path, NULL, &opts);
+     if (ret < 0) {
+-        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %d - %s", netcam->rtsp->path,av_err2str(ret));
++        av_strerror(ret, errstr, sizeof(errstr));
++        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %s", netcam->rtsp->path,errstr);
+         if (ret == -1094995529) MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Authentication?");
+         av_dict_free(&opts);
+-        avformat_close_input(&netcam->rtsp->format_context);
++        //The format context gets freed upon any error from open_input.        
+         return ret;
+     }    
+     av_dict_free(&opts);
+@@ -207,10 +206,12 @@ int rtsp_connect(netcam_context_ptr netcam)
+ 
+     netcam->rtsp->codec_context = netcam->rtsp->format_context->streams[netcam->rtsp->video_stream_index]->codec;
+ 
+-    netcam->rtsp->frame = av_frame_alloc();
+-
++    netcam->rtsp->frame = my_frame_alloc();
++    
+     // start up the feed
+     av_read_play(netcam->rtsp->format_context);
++    
++    netcam->rtsp->connected = 1;
+ 
+     return 0;
+ }
+@@ -218,10 +219,6 @@ int rtsp_connect(netcam_context_ptr netcam)
+ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+ {
+ 
+-    /* This code is called many times so optimize and do
+-     * little as possible in here.
+-     */
+-
+     struct timeval    curtime;
+     netcam_buff_ptr    buffer;
+     AVPacket           packet;
+@@ -233,7 +230,6 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+     buffer->used = 0;
+ 
+     av_init_packet(&packet);
+-
+     packet.data = NULL;
+     packet.size = 0;
+ 
+@@ -264,12 +260,12 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+     }
+     netcam->rtsp->readingframe = 0;
+ 
+-    // at this point, we are finished with the packet and frame, so free them.
++    // at this point, we are finished with the packet
+     av_free_packet(&packet);
+ 
+     if (size_decoded == 0) {
+         // something went wrong, end of stream? Interupted?
+-        MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: invalid frame! %d", size_decoded);
++        MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: invalid frame! %d ", size_decoded);
+         av_free(netcam->rtsp->frame);
+         avcodec_close(netcam->rtsp->codec_context);
+         avformat_close_input(&netcam->rtsp->format_context);
+@@ -284,57 +280,31 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+     }
+ 
+ 
+-    netcam->receiving->image_time = curtime;
+-
+     /*
+-     * Calculate our "running average" time for this netcam's
+-     * frame transmissions (except for the first time).
+-     * Note that the average frame time is held in microseconds.
++     * read is complete - set the current 'receiving' buffer atomically
++     * as 'latest', and make the buffer previously in 'latest' become
++     * the new 'receiving' and signal pic_ready.
+      */
+-    if (netcam->last_image.tv_sec) {
+-        netcam->av_frame_time = ((9.0 * netcam->av_frame_time) + 1000000.0 *
+-		    (curtime.tv_sec - netcam->last_image.tv_sec) +
+-			(curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+-
+-        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+-	        netcam->av_frame_time);
+-    }
+-
++    netcam->receiving->image_time = curtime;
+     netcam->last_image = curtime;
+-
+     netcam_buff *xchg;
+ 
+-    /*
+-     * read is complete - set the current 'receiving' buffer atomically
+-     * as 'latest', and make the buffer previously in 'latest' become
+-     * the new 'receiving'.
+-     */
+     pthread_mutex_lock(&netcam->mutex);
+-
+-    xchg = netcam->latest;
+-    netcam->latest = netcam->receiving;
+-    netcam->receiving = xchg;
+-    netcam->imgcnt++;
+-
+-    /*
+-     * We have a new frame ready.  We send a signal so that
+-     * any thread (e.g. the motion main loop) waiting for the
+-     * next frame to become available may proceed.
+-     */
+-    pthread_cond_signal(&netcam->pic_ready);
+-
++        xchg = netcam->latest;
++        netcam->latest = netcam->receiving;
++        netcam->receiving = xchg;
++        netcam->imgcnt++;
++        pthread_cond_signal(&netcam->pic_ready);
+     pthread_mutex_unlock(&netcam->mutex);
+ 
+     return 0;
+ }
+-
+-
+ void netcam_shutdown_rtsp(netcam_context_ptr netcam)
+ {
+ 
+     MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO,"%s: shutting down rtsp");
+ 
+-    av_free(netcam->rtsp->frame);
++    my_frame_free(netcam->rtsp->frame);
+     avcodec_close(netcam->rtsp->codec_context);
+     avformat_close_input(&netcam->rtsp->format_context);
+ 
+-- 
+1.8.1.4
+

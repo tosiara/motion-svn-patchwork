@@ -1,0 +1,4391 @@
+From 47caa045afa9f87faba9002cb543b164ed313c45 Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Tue, 23 Sep 2014 14:55:51 +0300
+Subject: [PATCH 25/26] Cumulative commit of all changes made by Mr-Dave
+ between e459e30064e0a23a99bc81507fff83b542431e1a and
+ eb8e2e2ce294ad98ce7e70ee963231584aed07ff Tree
+ https://github.com/Mr-Dave/motion/tree/de77c45abc57d3f629ce13f966f937384967dcec
+
+---
+ .gitignore            |   17 +
+ CHANGELOG             |   15 +-
+ INSTALL               |   97 ++-
+ conf.c                |   10 +
+ conf.h                |    1 +
+ config.h.in           |   49 +-
+ configure             | 1906 +++++++++++++++++++++++++++++++++----------------
+ configure.ac          |  171 ++---
+ ffmpeg.c              |   22 +-
+ ffmpeg.h              |    2 +
+ git-commit-version.sh |    5 +
+ motion-dist.conf.in   |    6 +-
+ motion.logrotate      |   10 -
+ netcam.c              |  193 ++---
+ netcam.h              |    6 +
+ netcam_rtsp.c         |  855 ++++++++++++++++++----
+ netcam_rtsp.h         |   24 +-
+ 17 files changed, 2297 insertions(+), 1092 deletions(-)
+ create mode 100644 .gitignore
+ create mode 100755 git-commit-version.sh
+ delete mode 100644 motion.logrotate
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..b730f6e
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,17 @@
++*.log
++.svn/
++*.o
++.depend
++motion
++config.h
++config.status
++Makefile
++motion-dist.conf
++motion.init-Debian
++motion.init-Fedora
++motion.init-FreeBSD.sh
++motion.spec
++thread1.conf
++thread2.conf
++thread3.conf
++thread4.conf
+diff --git a/CHANGELOG b/CHANGELOG
+index 6a2c247..5b3d285 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -53,7 +53,7 @@ Features
+      * 3fps bugfix from SVN rev559 (tosiara, Joerg Weber)
+      * Buffer overflow vulnerabilities (hyperbolic2346)
+      * Redundand -- boundary prefix (torao)
+-     * Proper size for memset and allocation size (Alfred Klomp) 
++     * Proper size for memset and allocation size (Alfred Klomp)
+    * Removed compiler warnings:  (Mr-Dave)
+        logger.c,jpegutils.c,netcam_ftp.c,track.c,
+        picture.c,webhttpd.c,stream.c,ffmpeg.c
+@@ -74,8 +74,16 @@ Features
+    * Revised configure.ac to generate compiler flag AVFMT_V53.(Mr-Dave)
+    * Revised INSTALL to indicate standard APT packages for RTSP (Mr-Dave)
+    * Revised configure.ac to recognize libavformat version 54 RTSP (Mr-Dave)
++   * Clean up the messaging for RTSP.
++   * Additional validations for RTSP connection and corrected free sequences
++   * Removed seg fault on failure to open first image, comments, isolation of RTSP
++   * Add AC_GNU_SOURCE macro to check for GNU C Library, fix compile when no FFMpeg.
++   * Implement inits of AV functions from bcl fork
++   * Add gray image upon disconnection
++   * Added tcp/udp transport config option from hyperbolic(commit 423ef7bb3)
++   * Revised comments to be in line with application standard.
++   * Restructure rtsp to handle rescaling and non YUV420 format, rotate, MJPEG input format
+ 
+-   
+ Bugfixes
+    * Avoid segfault detecting strerror_r() version GNU or SUSv3. (Angel Carpintero)
+    * Fix Segfault on reload or quit for vloopback (maybe other v4l1 devices too) (Peter Holik)
+@@ -110,8 +118,7 @@ Bugfixes
+    * Fixed leak in vloopback.
+    * Fixed a build of motion for some kernel version with not good videodev.h 
+    * Netcam Modulo 8
+-   * Fixed the 3-fps video problem. (tosiara)
+-   
++
+ 3.2.12 Summary of Changes
+ 
+ Bugfixes
+diff --git a/INSTALL b/INSTALL
+index fba3f71..8773bff 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -1,36 +1,61 @@
+-Required Packages:
+-    sudo apt-get install autoconf automake build-essential libtool libjpeg8-dev libzip-dev
+-
+-Obtain source code (via git)
+-    sudo apt-get install git
+-    cd ~
+-    git clone {https://github.com/your favorite fork}
+-
+-To rebuild the motion configure file use
+-    autoreconf
+-
+-Optional: With FFMPEG support:
+-    Build FFMPEG via their instructions
+-    Configure with manually built ffmpeg which currently installs to ~/bin and ~/ffmpeg_build
+-        Basic
+-            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include
+-
+-        With extra libraries for ffmpeg  IMPORTANT NOTE:  Your libraries will vary depending upon your build of FFMPEG
+-            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
+-
+-        With extra libraries for ffmpeg and install to ~/motion_build
+-            ./configure --prefix=$HOME/motion_build --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
+-
+-With LIBAV APT versions of libraries
+-    sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libav-tools
+-
+-Without any LIBAV/FFMPEG support or the installed version of libavcodec/libavformat
+-    ./configure
+-
+-Sample PI configuration with LIBAV
+-    ./configure --with-ffmpeg=/usr/lib/arm-linux-gnueabihf --with-ffmpeg-headers=/usr/include
+-
+-
+-Once configured type:
+-    make
+-    make install
++NOTE:  Versions come, versions go, packages change, etc.  These instructions are intended as a starting point
++       and may need modification by the time you read this.
++
++**********************************
++***    DEBIAN BASED SYSTEMS    ***
++
++Required Packages:
++    sudo apt-get install autoconf automake build-essential libtool libjpeg8-dev libzip-dev
++
++Obtain source code (via git)
++    sudo apt-get install git
++    cd ~
++    git clone {https://github.com/your favorite fork}
++
++To rebuild the motion configure file use
++    autoreconf
++
++Optional: With FFMPEG support:
++    Build FFMPEG via their instructions
++    Configure with manually built ffmpeg which currently installs to ~/bin and ~/ffmpeg_build
++        Basic
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include
++
++        With extra libraries for ffmpeg  IMPORTANT NOTE:  Your libraries will vary depending upon your build of FFMPEG
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++        With extra libraries for ffmpeg and install to ~/motion_build
++            ./configure --prefix=$HOME/motion_build --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++With LIBAV APT versions of libraries
++    sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libav-tools libswscale-dev
++
++Without any LIBAV/FFMPEG support or the installed version of libavcodec/libavformat
++    ./configure
++
++Sample PI configuration with LIBAV
++    ./configure --with-ffmpeg=/usr/lib/arm-linux-gnueabihf --with-ffmpeg-headers=/usr/include
++
++
++Once configured type:
++    make
++    make install
++
++*****************************
++***    OpenSUSE SYSTEM    ***
++
++sudo zypper install autoconf automake libtool git
++sudo zypper install --type pattern devel_basis
++sudo zypper install libjpeg8-devel
++sudo zypper install -t pattern devel_C_C++
++
++Optional:  FFmpeg files
++sudo zypper ar -f -n packman-essentials http://packman.inode.at/suse/openSUSE_13.1/Essentials/ packman-essentials
++sudo zypper ar -f -n packman-multimedia http://packman.inode.at/suse/openSUSE_13.1/Multimedia/ packman-multimedia
++sudo zypper install libffmpeg-devel
++
++./configure
++    make
++    make install
++
++*************************
+diff --git a/conf.c b/conf.c
+index 26585ee..cf905c6 100644
+--- a/conf.c
++++ b/conf.c
+@@ -146,6 +146,7 @@ struct config conf_template = {
+     netcam_keepalive:               "off",
+     netcam_proxy:                   NULL,
+     netcam_tolerant_check:          0,
++    rtsp_uses_tcp:                  1,
+     text_changes:                   0,
+     text_left:                      NULL,
+     text_right:                     DEF_TIMESTAMP,
+@@ -411,6 +412,15 @@ config_param config_params[] = {
+     print_bool
+     },
+     {
++    "rtsp_uses_tcp",
++    "# RTSP connection uses TCP to communicate to the camera. Can prevent image corruption.\n"
++    "# Default: on",
++    1,
++    CONF_OFFSET(rtsp_uses_tcp),
++    copy_bool,
++    print_bool
++    },
++    {
+     "auto_brightness",
+     "# Let motion regulate the brightness of a video device (default: off).\n"
+     "# The auto_brightness feature uses the brightness option as its target value.\n"
+diff --git a/conf.h b/conf.h
+index b03397e..c487b9e 100644
+--- a/conf.h
++++ b/conf.h
+@@ -123,6 +123,7 @@ struct config {
+     const char *netcam_keepalive;
+     const char *netcam_proxy;
+     unsigned int netcam_tolerant_check;
++    unsigned int rtsp_uses_tcp;
+     int text_changes;
+     const char *text_left;
+     const char *text_right;
+diff --git a/config.h.in b/config.h.in
+index 31262da..ac42b9c 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -1,4 +1,4 @@
+-/* config.h.in.  Generated from configure.in by autoheader.  */
++/* config.h.in.  Generated from configure.ac by autoheader.  */
+ 
+ /* Define to 1 if you have the <fcntl.h> header file. */
+ #undef HAVE_FCNTL_H
+@@ -108,20 +108,37 @@
+ /* Define to 1 if you have the ANSI C header files. */
+ #undef STDC_HEADERS
+ 
++/* Enable extensions on AIX 3, Interix.  */
++#ifndef _ALL_SOURCE
++# undef _ALL_SOURCE
++#endif
++/* Enable GNU extensions on systems that have them.  */
++#ifndef _GNU_SOURCE
++# undef _GNU_SOURCE
++#endif
++/* Enable threading extensions on Solaris.  */
++#ifndef _POSIX_PTHREAD_SEMANTICS
++# undef _POSIX_PTHREAD_SEMANTICS
++#endif
++/* Enable extensions on HP NonStop.  */
++#ifndef _TANDEM_SOURCE
++# undef _TANDEM_SOURCE
++#endif
++/* Enable general extensions on Solaris.  */
++#ifndef __EXTENSIONS__
++# undef __EXTENSIONS__
++#endif
++
++
++/* Define to 1 if on MINIX. */
++#undef _MINIX
++
++/* Define to 2 if the system does not provide POSIX.1 features except with
++   this defined. */
++#undef _POSIX_1_SOURCE
++
++/* Define to 1 if you need to in order for `stat' and other things to work. */
++#undef _POSIX_SOURCE
++
+ /* Define to empty if `const' does not conform to ANSI C. */
+ #undef const
+-
+-/* Define to 1 if you have av_avformat_alloc_context support */
+-#undef have_av_avformat_alloc_context
+-
+-/* Define to 1 if you have av_get_media_type_string support */
+-#undef have_av_get_media_type_string
+-
+-/* Define to 1 if you have av_register_protocol support */
+-#undef have_av_register_protocol
+-
+-/* Define to 1 if you have av_register_protocol2 support */
+-#undef have_av_register_protocol2
+-
+-/* Define to 1 if you have avformat_alloc_context support */
+-#undef have_avformat_alloc_context
+diff --git a/configure b/configure
+index 198f571..d6d7ee5 100755
+--- a/configure
++++ b/configure
+@@ -562,7 +562,6 @@ PACKAGE_STRING='motion trunkREVUNKNOWN'
+ PACKAGE_BUGREPORT=''
+ PACKAGE_URL=''
+ 
+-ac_unique_file="motion.c"
+ # Factoring default headers for most tests.
+ ac_includes_default="\
+ #include <stdio.h>
+@@ -599,16 +598,17 @@ ac_includes_default="\
+ # include <unistd.h>
+ #endif"
+ 
++ac_unique_file="motion.c"
+ ac_subst_vars='LTLIBOBJS
+ LIBOBJS
+ BIN_PATH
+-EGREP
+-GREP
+-CPP
+ RTPS_OBJ
+ FFMPEG_OBJ
+ SDL_OBJ
+ VIDEO
++EGREP
++GREP
++CPP
+ OBJEXT
+ EXEEXT
+ ac_ct_CC
+@@ -1491,94 +1491,6 @@ fi
+ 
+ } # ac_fn_c_try_compile
+ 
+-# ac_fn_c_try_link LINENO
+-# -----------------------
+-# Try to link conftest.$ac_ext, and return whether this succeeded.
+-ac_fn_c_try_link ()
+-{
+-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+-  rm -f conftest.$ac_objext conftest$ac_exeext
+-  if { { ac_try="$ac_link"
+-case "(($ac_try" in
+-  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+-  *) ac_try_echo=$ac_try;;
+-esac
+-eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+-$as_echo "$ac_try_echo"; } >&5
+-  (eval "$ac_link") 2>conftest.err
+-  ac_status=$?
+-  if test -s conftest.err; then
+-    grep -v '^ *+' conftest.err >conftest.er1
+-    cat conftest.er1 >&5
+-    mv -f conftest.er1 conftest.err
+-  fi
+-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+-  test $ac_status = 0; } && {
+-	 test -z "$ac_c_werror_flag" ||
+-	 test ! -s conftest.err
+-       } && test -s conftest$ac_exeext && {
+-	 test "$cross_compiling" = yes ||
+-	 $as_test_x conftest$ac_exeext
+-       }; then :
+-  ac_retval=0
+-else
+-  $as_echo "$as_me: failed program was:" >&5
+-sed 's/^/| /' conftest.$ac_ext >&5
+-
+-	ac_retval=1
+-fi
+-  # Delete the IPA/IPO (Inter Procedural Analysis/Optimization) information
+-  # created by the PGI compiler (conftest_ipa8_conftest.oo), as it would
+-  # interfere with the next link command; also delete a directory that is
+-  # left behind by Apple's compiler.  We do this before executing the actions.
+-  rm -rf conftest.dSYM conftest_ipa8_conftest.oo
+-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+-  as_fn_set_status $ac_retval
+-
+-} # ac_fn_c_try_link
+-
+-# ac_fn_c_try_run LINENO
+-# ----------------------
+-# Try to link conftest.$ac_ext, and return whether this succeeded. Assumes
+-# that executables *can* be run.
+-ac_fn_c_try_run ()
+-{
+-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+-  if { { ac_try="$ac_link"
+-case "(($ac_try" in
+-  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+-  *) ac_try_echo=$ac_try;;
+-esac
+-eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+-$as_echo "$ac_try_echo"; } >&5
+-  (eval "$ac_link") 2>&5
+-  ac_status=$?
+-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+-  test $ac_status = 0; } && { ac_try='./conftest$ac_exeext'
+-  { { case "(($ac_try" in
+-  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+-  *) ac_try_echo=$ac_try;;
+-esac
+-eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+-$as_echo "$ac_try_echo"; } >&5
+-  (eval "$ac_try") 2>&5
+-  ac_status=$?
+-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+-  test $ac_status = 0; }; }; then :
+-  ac_retval=0
+-else
+-  $as_echo "$as_me: program exited with status $ac_status" >&5
+-       $as_echo "$as_me: failed program was:" >&5
+-sed 's/^/| /' conftest.$ac_ext >&5
+-
+-       ac_retval=$ac_status
+-fi
+-  rm -rf conftest.dSYM conftest_ipa8_conftest.oo
+-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+-  as_fn_set_status $ac_retval
+-
+-} # ac_fn_c_try_run
+-
+ # ac_fn_c_try_cpp LINENO
+ # ----------------------
+ # Try to preprocess conftest.$ac_ext, and return whether this succeeded.
+@@ -1703,6 +1615,48 @@ fi
+ 
+ } # ac_fn_c_check_header_mongrel
+ 
++# ac_fn_c_try_run LINENO
++# ----------------------
++# Try to link conftest.$ac_ext, and return whether this succeeded. Assumes
++# that executables *can* be run.
++ac_fn_c_try_run ()
++{
++  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
++  if { { ac_try="$ac_link"
++case "(($ac_try" in
++  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
++  *) ac_try_echo=$ac_try;;
++esac
++eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
++$as_echo "$ac_try_echo"; } >&5
++  (eval "$ac_link") 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; } && { ac_try='./conftest$ac_exeext'
++  { { case "(($ac_try" in
++  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
++  *) ac_try_echo=$ac_try;;
++esac
++eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
++$as_echo "$ac_try_echo"; } >&5
++  (eval "$ac_try") 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; }; then :
++  ac_retval=0
++else
++  $as_echo "$as_me: program exited with status $ac_status" >&5
++       $as_echo "$as_me: failed program was:" >&5
++sed 's/^/| /' conftest.$ac_ext >&5
++
++       ac_retval=$ac_status
++fi
++  rm -rf conftest.dSYM conftest_ipa8_conftest.oo
++  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
++  as_fn_set_status $ac_retval
++
++} # ac_fn_c_try_run
++
+ # ac_fn_c_check_header_compile LINENO HEADER VAR INCLUDES
+ # -------------------------------------------------------
+ # Tests whether HEADER exists and can be compiled using the include files in
+@@ -1734,6 +1688,52 @@ $as_echo "$ac_res" >&6; }
+ 
+ } # ac_fn_c_check_header_compile
+ 
++# ac_fn_c_try_link LINENO
++# -----------------------
++# Try to link conftest.$ac_ext, and return whether this succeeded.
++ac_fn_c_try_link ()
++{
++  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
++  rm -f conftest.$ac_objext conftest$ac_exeext
++  if { { ac_try="$ac_link"
++case "(($ac_try" in
++  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
++  *) ac_try_echo=$ac_try;;
++esac
++eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
++$as_echo "$ac_try_echo"; } >&5
++  (eval "$ac_link") 2>conftest.err
++  ac_status=$?
++  if test -s conftest.err; then
++    grep -v '^ *+' conftest.err >conftest.er1
++    cat conftest.er1 >&5
++    mv -f conftest.er1 conftest.err
++  fi
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; } && {
++	 test -z "$ac_c_werror_flag" ||
++	 test ! -s conftest.err
++       } && test -s conftest$ac_exeext && {
++	 test "$cross_compiling" = yes ||
++	 $as_test_x conftest$ac_exeext
++       }; then :
++  ac_retval=0
++else
++  $as_echo "$as_me: failed program was:" >&5
++sed 's/^/| /' conftest.$ac_ext >&5
++
++	ac_retval=1
++fi
++  # Delete the IPA/IPO (Inter Procedural Analysis/Optimization) information
++  # created by the PGI compiler (conftest_ipa8_conftest.oo), as it would
++  # interfere with the next link command; also delete a directory that is
++  # left behind by Apple's compiler.  We do this before executing the actions.
++  rm -rf conftest.dSYM conftest_ipa8_conftest.oo
++  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
++  as_fn_set_status $ac_retval
++
++} # ac_fn_c_try_link
++
+ # ac_fn_c_check_func LINENO FUNC VAR
+ # ----------------------------------
+ # Tests whether FUNC exists, setting the cache variable VAR accordingly
+@@ -2384,9 +2384,6 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
+ ac_compiler_gnu=$ac_cv_c_compiler_gnu
+ 
+ 
+-
+-ac_config_headers="$ac_config_headers config.h"
+-
+ ac_ext=c
+ ac_cpp='$CPP $CPPFLAGS'
+ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+@@ -3178,39 +3175,1042 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
+ ac_compiler_gnu=$ac_cv_c_compiler_gnu
+ 
+ 
+-
+-THREAD_CFLAGS=""
+-THREAD_CHECK="/usr/include/pthread.h"
+-
+-Darwin=""
+-FreeBSD=""
+-
+-LINUXTHREADS="no"
+-
+-# Check whether --with-linuxthreads was given.
+-if test "${with_linuxthreads+set}" = set; then :
+-  withval=$with_linuxthreads; LINUXTHREADS="$withval"
+-
++ac_ext=c
++ac_cpp='$CPP $CPPFLAGS'
++ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_c_compiler_gnu
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking how to run the C preprocessor" >&5
++$as_echo_n "checking how to run the C preprocessor... " >&6; }
++# On Suns, sometimes $CPP names a directory.
++if test -n "$CPP" && test -d "$CPP"; then
++  CPP=
+ fi
++if test -z "$CPP"; then
++  if ${ac_cv_prog_CPP+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++      # Double quotes because CPP needs to be expanded
++    for CPP in "$CC -E" "$CC -E -traditional-cpp" "/lib/cpp"
++    do
++      ac_preproc_ok=false
++for ac_c_preproc_warn_flag in '' yes
++do
++  # Use a header file that comes with gcc, so configuring glibc
++  # with a fresh cross-compiler works.
++  # Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
++  # <limits.h> exists even on freestanding compilers.
++  # On the NeXT, cc -E runs the code through the compiler's parser,
++  # not just through cpp. "Syntax error" is here to catch this case.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#ifdef __STDC__
++# include <limits.h>
++#else
++# include <assert.h>
++#endif
++		     Syntax error
++_ACEOF
++if ac_fn_c_try_cpp "$LINENO"; then :
+ 
+-
+-PWCBSD="no"
+-
+-# Check whether --with-pwcbsd was given.
+-if test "${with_pwcbsd+set}" = set; then :
+-  withval=$with_pwcbsd; PWCBSD="$withval"
+-
++else
++  # Broken: fails on valid input.
++continue
+ fi
++rm -f conftest.err conftest.i conftest.$ac_ext
+ 
+-
+-
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Darwin" >&5
+-$as_echo_n "checking for Darwin... " >&6; }
+-Darwin=`uname -a | grep "Darwin"`
+-
+-if test "${Darwin}" = ""; then
+-	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+-$as_echo "no" >&6; }
++  # OK, works on sane cases.  Now check whether nonexistent headers
++  # can be detected and how.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <ac_nonexistent.h>
++_ACEOF
++if ac_fn_c_try_cpp "$LINENO"; then :
++  # Broken: success on invalid input.
++continue
++else
++  # Passes both tests.
++ac_preproc_ok=:
++break
++fi
++rm -f conftest.err conftest.i conftest.$ac_ext
++
++done
++# Because of `break', _AC_PREPROC_IFELSE's cleaning code was skipped.
++rm -f conftest.i conftest.err conftest.$ac_ext
++if $ac_preproc_ok; then :
++  break
++fi
++
++    done
++    ac_cv_prog_CPP=$CPP
++
++fi
++  CPP=$ac_cv_prog_CPP
++else
++  ac_cv_prog_CPP=$CPP
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $CPP" >&5
++$as_echo "$CPP" >&6; }
++ac_preproc_ok=false
++for ac_c_preproc_warn_flag in '' yes
++do
++  # Use a header file that comes with gcc, so configuring glibc
++  # with a fresh cross-compiler works.
++  # Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
++  # <limits.h> exists even on freestanding compilers.
++  # On the NeXT, cc -E runs the code through the compiler's parser,
++  # not just through cpp. "Syntax error" is here to catch this case.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#ifdef __STDC__
++# include <limits.h>
++#else
++# include <assert.h>
++#endif
++		     Syntax error
++_ACEOF
++if ac_fn_c_try_cpp "$LINENO"; then :
++
++else
++  # Broken: fails on valid input.
++continue
++fi
++rm -f conftest.err conftest.i conftest.$ac_ext
++
++  # OK, works on sane cases.  Now check whether nonexistent headers
++  # can be detected and how.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <ac_nonexistent.h>
++_ACEOF
++if ac_fn_c_try_cpp "$LINENO"; then :
++  # Broken: success on invalid input.
++continue
++else
++  # Passes both tests.
++ac_preproc_ok=:
++break
++fi
++rm -f conftest.err conftest.i conftest.$ac_ext
++
++done
++# Because of `break', _AC_PREPROC_IFELSE's cleaning code was skipped.
++rm -f conftest.i conftest.err conftest.$ac_ext
++if $ac_preproc_ok; then :
++
++else
++  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
++$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
++as_fn_error $? "C preprocessor \"$CPP\" fails sanity check
++See \`config.log' for more details" "$LINENO" 5; }
++fi
++
++ac_ext=c
++ac_cpp='$CPP $CPPFLAGS'
++ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_c_compiler_gnu
++
++
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for grep that handles long lines and -e" >&5
++$as_echo_n "checking for grep that handles long lines and -e... " >&6; }
++if ${ac_cv_path_GREP+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -z "$GREP"; then
++  ac_path_GREP_found=false
++  # Loop through the user's path and test for each of PROGNAME-LIST
++  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH$PATH_SEPARATOR/usr/xpg4/bin
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_prog in grep ggrep; do
++    for ac_exec_ext in '' $ac_executable_extensions; do
++      ac_path_GREP="$as_dir/$ac_prog$ac_exec_ext"
++      { test -f "$ac_path_GREP" && $as_test_x "$ac_path_GREP"; } || continue
++# Check for GNU ac_path_GREP and select it if it is found.
++  # Check for GNU $ac_path_GREP
++case `"$ac_path_GREP" --version 2>&1` in
++*GNU*)
++  ac_cv_path_GREP="$ac_path_GREP" ac_path_GREP_found=:;;
++*)
++  ac_count=0
++  $as_echo_n 0123456789 >"conftest.in"
++  while :
++  do
++    cat "conftest.in" "conftest.in" >"conftest.tmp"
++    mv "conftest.tmp" "conftest.in"
++    cp "conftest.in" "conftest.nl"
++    $as_echo 'GREP' >> "conftest.nl"
++    "$ac_path_GREP" -e 'GREP$' -e '-(cannot match)-' < "conftest.nl" >"conftest.out" 2>/dev/null || break
++    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
++    as_fn_arith $ac_count + 1 && ac_count=$as_val
++    if test $ac_count -gt ${ac_path_GREP_max-0}; then
++      # Best one so far, save it but keep looking for a better one
++      ac_cv_path_GREP="$ac_path_GREP"
++      ac_path_GREP_max=$ac_count
++    fi
++    # 10*(2^10) chars as input seems more than enough
++    test $ac_count -gt 10 && break
++  done
++  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
++esac
++
++      $ac_path_GREP_found && break 3
++    done
++  done
++  done
++IFS=$as_save_IFS
++  if test -z "$ac_cv_path_GREP"; then
++    as_fn_error $? "no acceptable grep could be found in $PATH$PATH_SEPARATOR/usr/xpg4/bin" "$LINENO" 5
++  fi
++else
++  ac_cv_path_GREP=$GREP
++fi
++
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_GREP" >&5
++$as_echo "$ac_cv_path_GREP" >&6; }
++ GREP="$ac_cv_path_GREP"
++
++
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for egrep" >&5
++$as_echo_n "checking for egrep... " >&6; }
++if ${ac_cv_path_EGREP+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if echo a | $GREP -E '(a|b)' >/dev/null 2>&1
++   then ac_cv_path_EGREP="$GREP -E"
++   else
++     if test -z "$EGREP"; then
++  ac_path_EGREP_found=false
++  # Loop through the user's path and test for each of PROGNAME-LIST
++  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH$PATH_SEPARATOR/usr/xpg4/bin
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_prog in egrep; do
++    for ac_exec_ext in '' $ac_executable_extensions; do
++      ac_path_EGREP="$as_dir/$ac_prog$ac_exec_ext"
++      { test -f "$ac_path_EGREP" && $as_test_x "$ac_path_EGREP"; } || continue
++# Check for GNU ac_path_EGREP and select it if it is found.
++  # Check for GNU $ac_path_EGREP
++case `"$ac_path_EGREP" --version 2>&1` in
++*GNU*)
++  ac_cv_path_EGREP="$ac_path_EGREP" ac_path_EGREP_found=:;;
++*)
++  ac_count=0
++  $as_echo_n 0123456789 >"conftest.in"
++  while :
++  do
++    cat "conftest.in" "conftest.in" >"conftest.tmp"
++    mv "conftest.tmp" "conftest.in"
++    cp "conftest.in" "conftest.nl"
++    $as_echo 'EGREP' >> "conftest.nl"
++    "$ac_path_EGREP" 'EGREP$' < "conftest.nl" >"conftest.out" 2>/dev/null || break
++    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
++    as_fn_arith $ac_count + 1 && ac_count=$as_val
++    if test $ac_count -gt ${ac_path_EGREP_max-0}; then
++      # Best one so far, save it but keep looking for a better one
++      ac_cv_path_EGREP="$ac_path_EGREP"
++      ac_path_EGREP_max=$ac_count
++    fi
++    # 10*(2^10) chars as input seems more than enough
++    test $ac_count -gt 10 && break
++  done
++  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
++esac
++
++      $ac_path_EGREP_found && break 3
++    done
++  done
++  done
++IFS=$as_save_IFS
++  if test -z "$ac_cv_path_EGREP"; then
++    as_fn_error $? "no acceptable egrep could be found in $PATH$PATH_SEPARATOR/usr/xpg4/bin" "$LINENO" 5
++  fi
++else
++  ac_cv_path_EGREP=$EGREP
++fi
++
++   fi
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_EGREP" >&5
++$as_echo "$ac_cv_path_EGREP" >&6; }
++ EGREP="$ac_cv_path_EGREP"
++
++
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for ANSI C header files" >&5
++$as_echo_n "checking for ANSI C header files... " >&6; }
++if ${ac_cv_header_stdc+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <stdlib.h>
++#include <stdarg.h>
++#include <string.h>
++#include <float.h>
++
++int
++main ()
++{
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++  ac_cv_header_stdc=yes
++else
++  ac_cv_header_stdc=no
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++
++if test $ac_cv_header_stdc = yes; then
++  # SunOS 4.x string.h does not declare mem*, contrary to ANSI.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <string.h>
++
++_ACEOF
++if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
++  $EGREP "memchr" >/dev/null 2>&1; then :
++
++else
++  ac_cv_header_stdc=no
++fi
++rm -f conftest*
++
++fi
++
++if test $ac_cv_header_stdc = yes; then
++  # ISC 2.0.2 stdlib.h does not declare free, contrary to ANSI.
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <stdlib.h>
++
++_ACEOF
++if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
++  $EGREP "free" >/dev/null 2>&1; then :
++
++else
++  ac_cv_header_stdc=no
++fi
++rm -f conftest*
++
++fi
++
++if test $ac_cv_header_stdc = yes; then
++  # /bin/cc in Irix-4.0.5 gets non-ANSI ctype macros unless using -ansi.
++  if test "$cross_compiling" = yes; then :
++  :
++else
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <ctype.h>
++#include <stdlib.h>
++#if ((' ' & 0x0FF) == 0x020)
++# define ISLOWER(c) ('a' <= (c) && (c) <= 'z')
++# define TOUPPER(c) (ISLOWER(c) ? 'A' + ((c) - 'a') : (c))
++#else
++# define ISLOWER(c) \
++		   (('a' <= (c) && (c) <= 'i') \
++		     || ('j' <= (c) && (c) <= 'r') \
++		     || ('s' <= (c) && (c) <= 'z'))
++# define TOUPPER(c) (ISLOWER(c) ? ((c) | 0x40) : (c))
++#endif
++
++#define XOR(e, f) (((e) && !(f)) || (!(e) && (f)))
++int
++main ()
++{
++  int i;
++  for (i = 0; i < 256; i++)
++    if (XOR (islower (i), ISLOWER (i))
++	|| toupper (i) != TOUPPER (i))
++      return 2;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_run "$LINENO"; then :
++
++else
++  ac_cv_header_stdc=no
++fi
++rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
++  conftest.$ac_objext conftest.beam conftest.$ac_ext
++fi
++
++fi
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_header_stdc" >&5
++$as_echo "$ac_cv_header_stdc" >&6; }
++if test $ac_cv_header_stdc = yes; then
++
++$as_echo "#define STDC_HEADERS 1" >>confdefs.h
++
++fi
++
++# On IRIX 5.3, sys/types and inttypes.h are conflicting.
++for ac_header in sys/types.h sys/stat.h stdlib.h string.h memory.h strings.h \
++		  inttypes.h stdint.h unistd.h
++do :
++  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
++ac_fn_c_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default
++"
++if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
++  cat >>confdefs.h <<_ACEOF
++#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
++_ACEOF
++
++fi
++
++done
++
++
++
++  ac_fn_c_check_header_mongrel "$LINENO" "minix/config.h" "ac_cv_header_minix_config_h" "$ac_includes_default"
++if test "x$ac_cv_header_minix_config_h" = xyes; then :
++  MINIX=yes
++else
++  MINIX=
++fi
++
++
++  if test "$MINIX" = yes; then
++
++$as_echo "#define _POSIX_SOURCE 1" >>confdefs.h
++
++
++$as_echo "#define _POSIX_1_SOURCE 2" >>confdefs.h
++
++
++$as_echo "#define _MINIX 1" >>confdefs.h
++
++  fi
++
++
++  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether it is safe to define __EXTENSIONS__" >&5
++$as_echo_n "checking whether it is safe to define __EXTENSIONS__... " >&6; }
++if ${ac_cv_safe_to_define___extensions__+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++#	  define __EXTENSIONS__ 1
++	  $ac_includes_default
++int
++main ()
++{
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++  ac_cv_safe_to_define___extensions__=yes
++else
++  ac_cv_safe_to_define___extensions__=no
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_safe_to_define___extensions__" >&5
++$as_echo "$ac_cv_safe_to_define___extensions__" >&6; }
++  test $ac_cv_safe_to_define___extensions__ = yes &&
++    $as_echo "#define __EXTENSIONS__ 1" >>confdefs.h
++
++  $as_echo "#define _ALL_SOURCE 1" >>confdefs.h
++
++  $as_echo "#define _GNU_SOURCE 1" >>confdefs.h
++
++  $as_echo "#define _POSIX_PTHREAD_SEMANTICS 1" >>confdefs.h
++
++  $as_echo "#define _TANDEM_SOURCE 1" >>confdefs.h
++
++
++
++
++ac_config_headers="$ac_config_headers config.h"
++
++ac_ext=c
++ac_cpp='$CPP $CPPFLAGS'
++ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_c_compiler_gnu
++if test -n "$ac_tool_prefix"; then
++  # Extract the first word of "${ac_tool_prefix}gcc", so it can be a program name with args.
++set dummy ${ac_tool_prefix}gcc; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$CC"; then
++  ac_cv_prog_CC="$CC" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    ac_cv_prog_CC="${ac_tool_prefix}gcc"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi
++fi
++CC=$ac_cv_prog_CC
++if test -n "$CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CC" >&5
++$as_echo "$CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++
++fi
++if test -z "$ac_cv_prog_CC"; then
++  ac_ct_CC=$CC
++  # Extract the first word of "gcc", so it can be a program name with args.
++set dummy gcc; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_ac_ct_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$ac_ct_CC"; then
++  ac_cv_prog_ac_ct_CC="$ac_ct_CC" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    ac_cv_prog_ac_ct_CC="gcc"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi
++fi
++ac_ct_CC=$ac_cv_prog_ac_ct_CC
++if test -n "$ac_ct_CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_ct_CC" >&5
++$as_echo "$ac_ct_CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++  if test "x$ac_ct_CC" = x; then
++    CC=""
++  else
++    case $cross_compiling:$ac_tool_warned in
++yes:)
++{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
++$as_echo "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
++ac_tool_warned=yes ;;
++esac
++    CC=$ac_ct_CC
++  fi
++else
++  CC="$ac_cv_prog_CC"
++fi
++
++if test -z "$CC"; then
++          if test -n "$ac_tool_prefix"; then
++    # Extract the first word of "${ac_tool_prefix}cc", so it can be a program name with args.
++set dummy ${ac_tool_prefix}cc; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$CC"; then
++  ac_cv_prog_CC="$CC" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    ac_cv_prog_CC="${ac_tool_prefix}cc"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi
++fi
++CC=$ac_cv_prog_CC
++if test -n "$CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CC" >&5
++$as_echo "$CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++
++  fi
++fi
++if test -z "$CC"; then
++  # Extract the first word of "cc", so it can be a program name with args.
++set dummy cc; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$CC"; then
++  ac_cv_prog_CC="$CC" # Let the user override the test.
++else
++  ac_prog_rejected=no
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    if test "$as_dir/$ac_word$ac_exec_ext" = "/usr/ucb/cc"; then
++       ac_prog_rejected=yes
++       continue
++     fi
++    ac_cv_prog_CC="cc"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++if test $ac_prog_rejected = yes; then
++  # We found a bogon in the path, so make sure we never use it.
++  set dummy $ac_cv_prog_CC
++  shift
++  if test $# != 0; then
++    # We chose a different compiler from the bogus one.
++    # However, it has the same basename, so the bogon will be chosen
++    # first if we set CC to just the basename; use the full file name.
++    shift
++    ac_cv_prog_CC="$as_dir/$ac_word${1+' '}$@"
++  fi
++fi
++fi
++fi
++CC=$ac_cv_prog_CC
++if test -n "$CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CC" >&5
++$as_echo "$CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++
++fi
++if test -z "$CC"; then
++  if test -n "$ac_tool_prefix"; then
++  for ac_prog in cl.exe
++  do
++    # Extract the first word of "$ac_tool_prefix$ac_prog", so it can be a program name with args.
++set dummy $ac_tool_prefix$ac_prog; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$CC"; then
++  ac_cv_prog_CC="$CC" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    ac_cv_prog_CC="$ac_tool_prefix$ac_prog"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi
++fi
++CC=$ac_cv_prog_CC
++if test -n "$CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CC" >&5
++$as_echo "$CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++
++    test -n "$CC" && break
++  done
++fi
++if test -z "$CC"; then
++  ac_ct_CC=$CC
++  for ac_prog in cl.exe
++do
++  # Extract the first word of "$ac_prog", so it can be a program name with args.
++set dummy $ac_prog; ac_word=$2
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
++$as_echo_n "checking for $ac_word... " >&6; }
++if ${ac_cv_prog_ac_ct_CC+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  if test -n "$ac_ct_CC"; then
++  ac_cv_prog_ac_ct_CC="$ac_ct_CC" # Let the user override the test.
++else
++as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
++for as_dir in $PATH
++do
++  IFS=$as_save_IFS
++  test -z "$as_dir" && as_dir=.
++    for ac_exec_ext in '' $ac_executable_extensions; do
++  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
++    ac_cv_prog_ac_ct_CC="$ac_prog"
++    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
++    break 2
++  fi
++done
++  done
++IFS=$as_save_IFS
++
++fi
++fi
++ac_ct_CC=$ac_cv_prog_ac_ct_CC
++if test -n "$ac_ct_CC"; then
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_ct_CC" >&5
++$as_echo "$ac_ct_CC" >&6; }
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++
++
++  test -n "$ac_ct_CC" && break
++done
++
++  if test "x$ac_ct_CC" = x; then
++    CC=""
++  else
++    case $cross_compiling:$ac_tool_warned in
++yes:)
++{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
++$as_echo "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
++ac_tool_warned=yes ;;
++esac
++    CC=$ac_ct_CC
++  fi
++fi
++
++fi
++
++
++test -z "$CC" && { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
++$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
++as_fn_error $? "no acceptable C compiler found in \$PATH
++See \`config.log' for more details" "$LINENO" 5; }
++
++# Provide some information about the compiler.
++$as_echo "$as_me:${as_lineno-$LINENO}: checking for C compiler version" >&5
++set X $ac_compile
++ac_compiler=$2
++for ac_option in --version -v -V -qversion; do
++  { { ac_try="$ac_compiler $ac_option >&5"
++case "(($ac_try" in
++  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
++  *) ac_try_echo=$ac_try;;
++esac
++eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
++$as_echo "$ac_try_echo"; } >&5
++  (eval "$ac_compiler $ac_option >&5") 2>conftest.err
++  ac_status=$?
++  if test -s conftest.err; then
++    sed '10a\
++... rest of stderr output deleted ...
++         10q' conftest.err >conftest.er1
++    cat conftest.er1 >&5
++  fi
++  rm -f conftest.er1 conftest.err
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }
++done
++
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether we are using the GNU C compiler" >&5
++$as_echo_n "checking whether we are using the GNU C compiler... " >&6; }
++if ${ac_cv_c_compiler_gnu+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++int
++main ()
++{
++#ifndef __GNUC__
++       choke me
++#endif
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++  ac_compiler_gnu=yes
++else
++  ac_compiler_gnu=no
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++ac_cv_c_compiler_gnu=$ac_compiler_gnu
++
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_c_compiler_gnu" >&5
++$as_echo "$ac_cv_c_compiler_gnu" >&6; }
++if test $ac_compiler_gnu = yes; then
++  GCC=yes
++else
++  GCC=
++fi
++ac_test_CFLAGS=${CFLAGS+set}
++ac_save_CFLAGS=$CFLAGS
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC accepts -g" >&5
++$as_echo_n "checking whether $CC accepts -g... " >&6; }
++if ${ac_cv_prog_cc_g+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  ac_save_c_werror_flag=$ac_c_werror_flag
++   ac_c_werror_flag=yes
++   ac_cv_prog_cc_g=no
++   CFLAGS="-g"
++   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++int
++main ()
++{
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++  ac_cv_prog_cc_g=yes
++else
++  CFLAGS=""
++      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++int
++main ()
++{
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++
++else
++  ac_c_werror_flag=$ac_save_c_werror_flag
++	 CFLAGS="-g"
++	 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++int
++main ()
++{
++
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_compile "$LINENO"; then :
++  ac_cv_prog_cc_g=yes
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++   ac_c_werror_flag=$ac_save_c_werror_flag
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_prog_cc_g" >&5
++$as_echo "$ac_cv_prog_cc_g" >&6; }
++if test "$ac_test_CFLAGS" = set; then
++  CFLAGS=$ac_save_CFLAGS
++elif test $ac_cv_prog_cc_g = yes; then
++  if test "$GCC" = yes; then
++    CFLAGS="-g -O2"
++  else
++    CFLAGS="-g"
++  fi
++else
++  if test "$GCC" = yes; then
++    CFLAGS="-O2"
++  else
++    CFLAGS=
++  fi
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $CC option to accept ISO C89" >&5
++$as_echo_n "checking for $CC option to accept ISO C89... " >&6; }
++if ${ac_cv_prog_cc_c89+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  ac_cv_prog_cc_c89=no
++ac_save_CC=$CC
++cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#include <stdarg.h>
++#include <stdio.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++/* Most of the following tests are stolen from RCS 5.7's src/conf.sh.  */
++struct buf { int x; };
++FILE * (*rcsopen) (struct buf *, struct stat *, int);
++static char *e (p, i)
++     char **p;
++     int i;
++{
++  return p[i];
++}
++static char *f (char * (*g) (char **, int), char **p, ...)
++{
++  char *s;
++  va_list v;
++  va_start (v,p);
++  s = g (p, va_arg (v,int));
++  va_end (v);
++  return s;
++}
++
++/* OSF 4.0 Compaq cc is some sort of almost-ANSI by default.  It has
++   function prototypes and stuff, but not '\xHH' hex character constants.
++   These don't provoke an error unfortunately, instead are silently treated
++   as 'x'.  The following induces an error, until -std is added to get
++   proper ANSI mode.  Curiously '\x00'!='x' always comes out true, for an
++   array size at least.  It's necessary to write '\x00'==0 to get something
++   that's true only with -std.  */
++int osf4_cc_array ['\x00' == 0 ? 1 : -1];
++
++/* IBM C 6 for AIX is almost-ANSI by default, but it replaces macro parameters
++   inside strings and character constants.  */
++#define FOO(x) 'x'
++int xlc6_cc_array[FOO(a) == 'x' ? 1 : -1];
++
++int test (int i, double x);
++struct s1 {int (*f) (int a);};
++struct s2 {int (*f) (double a);};
++int pairnames (int, char **, FILE *(*)(struct buf *, struct stat *, int), int, int);
++int argc;
++char **argv;
++int
++main ()
++{
++return f (e, argv, 0) != argv[0]  ||  f (e, argv, 1) != argv[1];
++  ;
++  return 0;
++}
++_ACEOF
++for ac_arg in '' -qlanglvl=extc89 -qlanglvl=ansi -std \
++	-Ae "-Aa -D_HPUX_SOURCE" "-Xc -D__EXTENSIONS__"
++do
++  CC="$ac_save_CC $ac_arg"
++  if ac_fn_c_try_compile "$LINENO"; then :
++  ac_cv_prog_cc_c89=$ac_arg
++fi
++rm -f core conftest.err conftest.$ac_objext
++  test "x$ac_cv_prog_cc_c89" != "xno" && break
++done
++rm -f conftest.$ac_ext
++CC=$ac_save_CC
++
++fi
++# AC_CACHE_VAL
++case "x$ac_cv_prog_cc_c89" in
++  x)
++    { $as_echo "$as_me:${as_lineno-$LINENO}: result: none needed" >&5
++$as_echo "none needed" >&6; } ;;
++  xno)
++    { $as_echo "$as_me:${as_lineno-$LINENO}: result: unsupported" >&5
++$as_echo "unsupported" >&6; } ;;
++  *)
++    CC="$CC $ac_cv_prog_cc_c89"
++    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_prog_cc_c89" >&5
++$as_echo "$ac_cv_prog_cc_c89" >&6; } ;;
++esac
++if test "x$ac_cv_prog_cc_c89" != xno; then :
++
++fi
++
++ac_ext=c
++ac_cpp='$CPP $CPPFLAGS'
++ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_c_compiler_gnu
++
++
++
++THREAD_CFLAGS=""
++THREAD_CHECK="/usr/include/pthread.h"
++
++Darwin=""
++FreeBSD=""
++
++LINUXTHREADS="no"
++
++# Check whether --with-linuxthreads was given.
++if test "${with_linuxthreads+set}" = set; then :
++  withval=$with_linuxthreads; LINUXTHREADS="$withval"
++
++fi
++
++
++PWCBSD="no"
++
++# Check whether --with-pwcbsd was given.
++if test "${with_pwcbsd+set}" = set; then :
++  withval=$with_pwcbsd; PWCBSD="$withval"
++
++fi
++
++
++
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Darwin" >&5
++$as_echo_n "checking for Darwin... " >&6; }
++Darwin=`uname -a | grep "Darwin"`
++
++if test "${Darwin}" = ""; then
++	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
+ 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for *BSD" >&5
+ $as_echo_n "checking for *BSD... " >&6; }
+ 
+@@ -3833,7 +4833,7 @@ fi
+ 
+ 
+ 	if test "${BKTR}" = "no"; then
+-        	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
+ 	fi
+ 
+ else
+@@ -3867,10 +4867,10 @@ $as_echo_n "checking for linuxthreads... " >&6; }
+ # Check for thread header
+ #
+ 	if test -f "${THREAD_CHECK}"; then
+-       	HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
+-       	THREADS="yes"
++		HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
++		THREADS="yes"
+ 	else
+-       	THREADS="no"
++		THREADS="no"
+ 	fi
+ 
+ #
+@@ -3880,7 +4880,7 @@ $as_echo_n "checking for linuxthreads... " >&6; }
+ 		THREADS="yes"
+ 		LIB_THREAD="-llthread -llgcc_r"
+ 	else
+-       	THREADS="no"
++		THREADS="no"
+ 	fi
+ 
+ # Checks for Library linuxthreads for FreeBSD
+@@ -3912,7 +4912,6 @@ elif test -f "${THREAD_CHECK}"; then
+ 
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking threads" >&5
+ $as_echo_n "checking threads... " >&6; }
+-
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ #include <pthread.h>
+@@ -4259,6 +5258,7 @@ fi
+ #
+ # Check for libavcodec and libavformat from ffmpeg
+ #
++
+ FFMPEG_DIR="yes"
+ FFMPEG_OK="no_found"
+ FFMPEG_OBJ=""
+@@ -4285,7 +5285,7 @@ fi
+ #
+ # ffmpeg custom extra libraries
+ #
+-FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz "
++FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz -lswscale "
+ 
+ # Check whether --with-ffmpeg-libs was given.
+ if test "${with_ffmpeg_libs+set}" = set; then :
+@@ -4422,125 +5422,46 @@ $as_echo "found ${FFMPEG_DIR}/include/ffmpeg/avformat.h" >&6; }
+     elif test -f ${FFMPEG_DIR}/include/libavformat/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/libavformat/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/include/libavformat/avformat.h" >&6; }
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat"
+-        AVFORMAT_DIR="${FFMPEG_DIR}/include/libavformat/avformat.h"
+-    elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
+-        { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&5
+-$as_echo "found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&6; }
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat"
+-        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h"
+-    elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
+-        { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/libavformat/avformat.h" >&5
+-$as_echo "found ${FFMPEG_DIR}/libavformat/avformat.h" >&6; }
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR} -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I{FFMPEG_DIR}/libavformat"
+-        AVFORMAT_DIR="${FFMPEG_DIR}/libavformat/avformat.h"
+-    else
+-        { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+-$as_echo "not found" >&6; }
+-        FFMPEG_OK="no_found"
+-        AVFORMAT_DIR="avformat.h"
+-        echo "**********************************************"
+-        echo "*       avformat.h not found:                *"
+-        echo "*    ALL FFMPEG FEATURES DISABLED            *"
+-        echo "*                                            *"
+-        echo "* Please read the Motion Guide for help:     *"
+-        echo "* http://motion.sourceforge.net              *"
+-        echo "**********************************************"
+-        echo ""
+-    fi
+-
+-#
+-# If ffmpeg libs and headers have been found
+-#
+-
+-    if  test "${FFMPEG_OK}" = "found"; then
+-        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} ${FFMPEG_EXTRALIBS}"
+-        TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
+-        TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
+-
+-        FFMPEG_OBJ="ffmpeg.o"
+-
+-
+-        { $as_echo "$as_me:${as_lineno-$LINENO}: checking avformat version 55" >&5
+-$as_echo_n "checking avformat version 55... " >&6; }
+-        if test "$cross_compiling" = yes; then :
+-  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+-$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+-as_fn_error $? "cannot run test program while cross compiling
+-See \`config.log' for more details" "$LINENO" 5; }
+-else
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-
+-
+-             #include <${AVFORMAT_DIR}>
+-             int main(void){
+-                 if (LIBAVFORMAT_VERSION_MAJOR >= 55) return -1;
+-                 return 0;
+-             }
+-
+-_ACEOF
+-if ac_fn_c_try_run "$LINENO"; then :
+-
+-            { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+-$as_echo "no" >&6; }
+-            { $as_echo "$as_me:${as_lineno-$LINENO}: checking avformat version 53/54" >&5
+-$as_echo_n "checking avformat version 53/54... " >&6; }
+-            if test "$cross_compiling" = yes; then :
+-  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+-$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+-as_fn_error $? "cannot run test program while cross compiling
+-See \`config.log' for more details" "$LINENO" 5; }
+-else
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-
+-
+-             #include <${AVFORMAT_DIR}>
+-             int main(void){
+-                 if ((LIBAVFORMAT_VERSION_MAJOR = 53) || (LIBAVFORMAT_VERSION_MAJOR = 54)) return -1;
+-                 return 0;
+-             }
+-
+-_ACEOF
+-if ac_fn_c_try_run "$LINENO"; then :
+-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+-$as_echo "no" >&6; }
+-else
+-
+-             { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+-$as_echo "yes" >&6; }
+-             TEMP_CFLAGS="${TEMP_CFLAGS} -DAVFMT_V53"
+-             RTPS_OBJ="netcam_rtsp.o"
+-
+-
+-
+-fi
+-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+-  conftest.$ac_objext conftest.beam conftest.$ac_ext
+-fi
+-
+-
+-else
+-
+-             { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes version 55 or higher" >&5
+-$as_echo "yes version 55 or higher" >&6; }
+-             TEMP_CFLAGS="${TEMP_CFLAGS} -DFFMPEG_V55"
+-             RTPS_OBJ="netcam_rtsp.o"
+-
+-
+-
+-fi
+-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+-  conftest.$ac_objext conftest.beam conftest.$ac_ext
+-fi
+-
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/libavformat/avformat.h"
++    elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
++        { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&5
++$as_echo "found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&6; }
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h"
++    elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
++        { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/libavformat/avformat.h" >&5
++$as_echo "found ${FFMPEG_DIR}/libavformat/avformat.h" >&6; }
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR} -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I{FFMPEG_DIR}/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/libavformat/avformat.h"
++    else
++        { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
++$as_echo "not found" >&6; }
++        FFMPEG_OK="no_found"
++        AVFORMAT_DIR="avformat.h"
++        echo "**********************************************"
++        echo "*       avformat.h not found:                *"
++        echo "*    ALL FFMPEG FEATURES DISABLED            *"
++        echo "*                                            *"
++        echo "* Please read the Motion Guide for help:     *"
++        echo "* http://motion.sourceforge.net              *"
++        echo "**********************************************"
++        echo ""
++    fi
+ 
++#
++# If ffmpeg libs and headers have been found
++#
+ 
++    if  test "${FFMPEG_OK}" = "found"; then
++        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} ${FFMPEG_EXTRALIBS}"
++        TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
++        TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
+ 
++        FFMPEG_OBJ="ffmpeg.o"
+ 
+ 
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking file_protocol is defined in ffmpeg ?" >&5
+@@ -4581,6 +5502,11 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ fi
+ fi
+ 
++# Revised RTSP module so that it can be included
++# whether or not FFMPEG is found.
++
++    RTPS_OBJ="netcam_rtsp.o"
++
+ 
+ #
+ # Check SQLITE3
+@@ -4737,8 +5663,8 @@ $as_echo "skipped" >&6; }
+ 		{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for mysql headers in $MYSQL_HEADERS" >&5
+ $as_echo_n "checking for mysql headers in $MYSQL_HEADERS... " >&6; }
+ 		# Manual detection for <withval>
+-        	if test -f $MYSQL_HEADERS/mysql.h; then
+-                	MYSQL_INCDIR=$MYSQL_HEADERS
++		if test -f $MYSQL_HEADERS/mysql.h; then
++			MYSQL_INCDIR=$MYSQL_HEADERS
+ 	        fi
+ 	fi
+ 
+@@ -4760,7 +5686,7 @@ $as_echo "$MYSQL_INCDIR yes" >&6; }
+ 	if test "${MYSQL_LIBS}" = "yes"; then
+ 		{ $as_echo "$as_me:${as_lineno-$LINENO}: checking autodect mysql libs" >&5
+ $as_echo_n "checking autodect mysql libs... " >&6; }
+-        	# Autodetect
++		# Autodetect
+ 		for w in /usr/lib64 /usr/lib /usr/local/lib /usr/mysql /usr/local/mysql /usr/local/mysql/lib /opt /opt/mysql /usr/lib/x86_64-linux-gnu; do
+ 			# check for plain setups
+ 			if test -f $w/libmysqlclient.a -o -f $w/libmysqlclient.so; then
+@@ -4779,7 +5705,7 @@ $as_echo_n "checking autodect mysql libs... " >&6; }
+ 			fi
+ 		done
+ 	elif test "${MYSQL_LIBS}" = "no"; then
+-        	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for mysql libs" >&5
++		{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for mysql libs" >&5
+ $as_echo_n "checking for mysql libs... " >&6; }
+ 	        { $as_echo "$as_me:${as_lineno-$LINENO}: result: skipped" >&5
+ $as_echo "skipped" >&6; }
+@@ -4934,8 +5860,8 @@ $as_echo "skipped" >&6; }
+ 		{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pgsql headers in $PGSQL_HEADERS" >&5
+ $as_echo_n "checking for pgsql headers in $PGSQL_HEADERS... " >&6; }
+ 		# Manual detection for <withval>
+-        	if test -f $PGSQL_HEADERS/libpq-fe.h; then
+-                	PGSQL_INCDIR=$PGSQL_HEADERS
++		if test -f $PGSQL_HEADERS/libpq-fe.h; then
++			PGSQL_INCDIR=$PGSQL_HEADERS
+ 	        fi
+ 	fi
+ 
+@@ -4947,389 +5873,121 @@ $as_echo "not found" >&6; }
+ 	else
+ 		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes $PGSQL_INCDIR" >&5
+ $as_echo "yes $PGSQL_INCDIR" >&6; }
+-		PGSQL_HEADERS="yes"
+-	fi
+-
+-
+-	if test "${PGSQL_HEADERS}" = "yes"; then
+-
+-		# ******* Search pgsql libs *********
+-		if test "${PGSQL_LIBS}" = "yes"; then
+-			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking autodect pgsql libs" >&5
+-$as_echo_n "checking autodect pgsql libs... " >&6; }
+-			# Autodetect
+-			PGSQL_INCLUDE="-I$PGSQL_INCDIR"
+-			PGSQL_LIBDIR=$PGSQL_DIR/lib
+-
+-			if test -f /usr/lib64/libpq.so ; then
+-				PGSQL_LIBDIR=/usr/lib64
+-			elif test -f $PGSQL_DIR/lib/pgsql/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql
+-			elif test -f $PGSQL_DIR/lib/postgresql/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib/postgresql
+-			elif test -f $PGSQL_DIR/lib/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib
+-			else
+-				PGSQL_LIBDIR=""
+-			fi
+-
+-			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $PGSQL_LIBDIR" >&5
+-$as_echo "$PGSQL_LIBDIR" >&6; }
+-
+-		elif test "${PGSQL_LIBS}" = "no"; then
+-	        	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pgsql libs" >&5
+-$as_echo_n "checking for pgsql libs... " >&6; }
+-		        { $as_echo "$as_me:${as_lineno-$LINENO}: result: skipped" >&5
+-$as_echo "skipped" >&6; }
+-		else
+-			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pgsql libs in $PGSQL_LIBS" >&5
+-$as_echo_n "checking for pgsql libs in $PGSQL_LIBS... " >&6; }
+-			# Manual detection for <withval>
+-			if test -f $PGSQL_LIBS/libpq.a -o -f $PGSQL_LIBS/libpq.so; then
+-				PGSQL_LIBDIR=$PGSQL_LIBS
+-			fi
+-		fi
+-
+-
+-		if test -z "$PGSQL_LIBDIR" ; then
+-			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+-$as_echo "not found" >&6; }
+-			echo "Invalid PostgreSQL directory $PGSQL_LIBDIR - unable to find libpq.a or libpq.so."
+-		else
+-			#LDFLAGS="$TEMP_LDFLAGS -L$PGSQL_LIBDIR"
+-			saved_CFLAGS=$CFLAGS
+-			saved_LIBS=$LIBS
+-			CFLAGS="-I$PGSQL_INCDIR"
+-			LIBS="-L$PGSQL_LIBDIR"
+-			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for PQconnectStart in -lpq" >&5
+-$as_echo_n "checking for PQconnectStart in -lpq... " >&6; }
+-if ${ac_cv_lib_pq_PQconnectStart+:} false; then :
+-  $as_echo_n "(cached) " >&6
+-else
+-  ac_check_lib_save_LIBS=$LIBS
+-LIBS="-lpq  $LIBS"
+-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-
+-/* Override any GCC internal prototype to avoid an error.
+-   Use char because int might match the return type of a GCC
+-   builtin and then its argument prototype would still apply.  */
+-#ifdef __cplusplus
+-extern "C"
+-#endif
+-char PQconnectStart ();
+-int
+-main ()
+-{
+-return PQconnectStart ();
+-  ;
+-  return 0;
+-}
+-_ACEOF
+-if ac_fn_c_try_link "$LINENO"; then :
+-  ac_cv_lib_pq_PQconnectStart=yes
+-else
+-  ac_cv_lib_pq_PQconnectStart=no
+-fi
+-rm -f core conftest.err conftest.$ac_objext \
+-    conftest$ac_exeext conftest.$ac_ext
+-LIBS=$ac_check_lib_save_LIBS
+-fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pq_PQconnectStart" >&5
+-$as_echo "$ac_cv_lib_pq_PQconnectStart" >&6; }
+-if test "x$ac_cv_lib_pq_PQconnectStart" = xyes; then :
+-
+-						PGSQL_SUPPORT="yes"
+-						TEMP_LIBS="$TEMP_LIBS -L$PGSQL_LIBDIR -lpq"
+-						TEMP_CFLAGS="$TEMP_CFLAGS -I$PGSQL_INCDIR"
+-
+-$as_echo "#define HAVE_PGSQL 1" >>confdefs.h
+-
+-
+-else
+-  as_fn_error $? "PostgreSQL support can't build without PostgreSQL libraries" "$LINENO" 5
+-fi
+-
+-			LDFLAGS=""
+-			CFLAGS=$saved_CFLAGS
+-			LIBS=$saved_LIBS
+-		fi
+-
+-	fi # end pgsql-include , pgsql-libs
+-
+-# end PostgreSQL detection
+-fi
+-
+-
+-#Checks for header files.
+-ac_ext=c
+-ac_cpp='$CPP $CPPFLAGS'
+-ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+-ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+-ac_compiler_gnu=$ac_cv_c_compiler_gnu
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking how to run the C preprocessor" >&5
+-$as_echo_n "checking how to run the C preprocessor... " >&6; }
+-# On Suns, sometimes $CPP names a directory.
+-if test -n "$CPP" && test -d "$CPP"; then
+-  CPP=
+-fi
+-if test -z "$CPP"; then
+-  if ${ac_cv_prog_CPP+:} false; then :
+-  $as_echo_n "(cached) " >&6
+-else
+-      # Double quotes because CPP needs to be expanded
+-    for CPP in "$CC -E" "$CC -E -traditional-cpp" "/lib/cpp"
+-    do
+-      ac_preproc_ok=false
+-for ac_c_preproc_warn_flag in '' yes
+-do
+-  # Use a header file that comes with gcc, so configuring glibc
+-  # with a fresh cross-compiler works.
+-  # Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
+-  # <limits.h> exists even on freestanding compilers.
+-  # On the NeXT, cc -E runs the code through the compiler's parser,
+-  # not just through cpp. "Syntax error" is here to catch this case.
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-#ifdef __STDC__
+-# include <limits.h>
+-#else
+-# include <assert.h>
+-#endif
+-		     Syntax error
+-_ACEOF
+-if ac_fn_c_try_cpp "$LINENO"; then :
+-
+-else
+-  # Broken: fails on valid input.
+-continue
+-fi
+-rm -f conftest.err conftest.i conftest.$ac_ext
+-
+-  # OK, works on sane cases.  Now check whether nonexistent headers
+-  # can be detected and how.
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-#include <ac_nonexistent.h>
+-_ACEOF
+-if ac_fn_c_try_cpp "$LINENO"; then :
+-  # Broken: success on invalid input.
+-continue
+-else
+-  # Passes both tests.
+-ac_preproc_ok=:
+-break
+-fi
+-rm -f conftest.err conftest.i conftest.$ac_ext
+-
+-done
+-# Because of `break', _AC_PREPROC_IFELSE's cleaning code was skipped.
+-rm -f conftest.i conftest.err conftest.$ac_ext
+-if $ac_preproc_ok; then :
+-  break
+-fi
+-
+-    done
+-    ac_cv_prog_CPP=$CPP
+-
+-fi
+-  CPP=$ac_cv_prog_CPP
+-else
+-  ac_cv_prog_CPP=$CPP
+-fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $CPP" >&5
+-$as_echo "$CPP" >&6; }
+-ac_preproc_ok=false
+-for ac_c_preproc_warn_flag in '' yes
+-do
+-  # Use a header file that comes with gcc, so configuring glibc
+-  # with a fresh cross-compiler works.
+-  # Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
+-  # <limits.h> exists even on freestanding compilers.
+-  # On the NeXT, cc -E runs the code through the compiler's parser,
+-  # not just through cpp. "Syntax error" is here to catch this case.
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-#ifdef __STDC__
+-# include <limits.h>
+-#else
+-# include <assert.h>
+-#endif
+-		     Syntax error
+-_ACEOF
+-if ac_fn_c_try_cpp "$LINENO"; then :
+-
+-else
+-  # Broken: fails on valid input.
+-continue
+-fi
+-rm -f conftest.err conftest.i conftest.$ac_ext
++		PGSQL_HEADERS="yes"
++	fi
+ 
+-  # OK, works on sane cases.  Now check whether nonexistent headers
+-  # can be detected and how.
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-#include <ac_nonexistent.h>
+-_ACEOF
+-if ac_fn_c_try_cpp "$LINENO"; then :
+-  # Broken: success on invalid input.
+-continue
+-else
+-  # Passes both tests.
+-ac_preproc_ok=:
+-break
+-fi
+-rm -f conftest.err conftest.i conftest.$ac_ext
+ 
+-done
+-# Because of `break', _AC_PREPROC_IFELSE's cleaning code was skipped.
+-rm -f conftest.i conftest.err conftest.$ac_ext
+-if $ac_preproc_ok; then :
++	if test "${PGSQL_HEADERS}" = "yes"; then
+ 
+-else
+-  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+-$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+-as_fn_error $? "C preprocessor \"$CPP\" fails sanity check
+-See \`config.log' for more details" "$LINENO" 5; }
+-fi
++		# ******* Search pgsql libs *********
++		if test "${PGSQL_LIBS}" = "yes"; then
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking autodect pgsql libs" >&5
++$as_echo_n "checking autodect pgsql libs... " >&6; }
++			# Autodetect
++			PGSQL_INCLUDE="-I$PGSQL_INCDIR"
++			PGSQL_LIBDIR=$PGSQL_DIR/lib
+ 
+-ac_ext=c
+-ac_cpp='$CPP $CPPFLAGS'
+-ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+-ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+-ac_compiler_gnu=$ac_cv_c_compiler_gnu
++			if test -f /usr/lib64/libpq.so ; then
++				PGSQL_LIBDIR=/usr/lib64
++			elif test -f $PGSQL_DIR/lib/pgsql/libpq.so ; then
++				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql
++			elif test -f $PGSQL_DIR/lib/postgresql/libpq.so ; then
++				PGSQL_LIBDIR=$PGSQL_DIR/lib/postgresql
++			elif test -f $PGSQL_DIR/lib/libpq.so ; then
++				PGSQL_LIBDIR=$PGSQL_DIR/lib
++			else
++				PGSQL_LIBDIR=""
++			fi
+ 
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $PGSQL_LIBDIR" >&5
++$as_echo "$PGSQL_LIBDIR" >&6; }
+ 
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for grep that handles long lines and -e" >&5
+-$as_echo_n "checking for grep that handles long lines and -e... " >&6; }
+-if ${ac_cv_path_GREP+:} false; then :
++		elif test "${PGSQL_LIBS}" = "no"; then
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pgsql libs" >&5
++$as_echo_n "checking for pgsql libs... " >&6; }
++		        { $as_echo "$as_me:${as_lineno-$LINENO}: result: skipped" >&5
++$as_echo "skipped" >&6; }
++		else
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pgsql libs in $PGSQL_LIBS" >&5
++$as_echo_n "checking for pgsql libs in $PGSQL_LIBS... " >&6; }
++			# Manual detection for <withval>
++			if test -f $PGSQL_LIBS/libpq.a -o -f $PGSQL_LIBS/libpq.so; then
++				PGSQL_LIBDIR=$PGSQL_LIBS
++			fi
++		fi
++
++
++		if test -z "$PGSQL_LIBDIR" ; then
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
++$as_echo "not found" >&6; }
++			echo "Invalid PostgreSQL directory $PGSQL_LIBDIR - unable to find libpq.a or libpq.so."
++		else
++			#LDFLAGS="$TEMP_LDFLAGS -L$PGSQL_LIBDIR"
++			saved_CFLAGS=$CFLAGS
++			saved_LIBS=$LIBS
++			CFLAGS="-I$PGSQL_INCDIR"
++			LIBS="-L$PGSQL_LIBDIR"
++			{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for PQconnectStart in -lpq" >&5
++$as_echo_n "checking for PQconnectStart in -lpq... " >&6; }
++if ${ac_cv_lib_pq_PQconnectStart+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+-  if test -z "$GREP"; then
+-  ac_path_GREP_found=false
+-  # Loop through the user's path and test for each of PROGNAME-LIST
+-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+-for as_dir in $PATH$PATH_SEPARATOR/usr/xpg4/bin
+-do
+-  IFS=$as_save_IFS
+-  test -z "$as_dir" && as_dir=.
+-    for ac_prog in grep ggrep; do
+-    for ac_exec_ext in '' $ac_executable_extensions; do
+-      ac_path_GREP="$as_dir/$ac_prog$ac_exec_ext"
+-      { test -f "$ac_path_GREP" && $as_test_x "$ac_path_GREP"; } || continue
+-# Check for GNU ac_path_GREP and select it if it is found.
+-  # Check for GNU $ac_path_GREP
+-case `"$ac_path_GREP" --version 2>&1` in
+-*GNU*)
+-  ac_cv_path_GREP="$ac_path_GREP" ac_path_GREP_found=:;;
+-*)
+-  ac_count=0
+-  $as_echo_n 0123456789 >"conftest.in"
+-  while :
+-  do
+-    cat "conftest.in" "conftest.in" >"conftest.tmp"
+-    mv "conftest.tmp" "conftest.in"
+-    cp "conftest.in" "conftest.nl"
+-    $as_echo 'GREP' >> "conftest.nl"
+-    "$ac_path_GREP" -e 'GREP$' -e '-(cannot match)-' < "conftest.nl" >"conftest.out" 2>/dev/null || break
+-    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
+-    as_fn_arith $ac_count + 1 && ac_count=$as_val
+-    if test $ac_count -gt ${ac_path_GREP_max-0}; then
+-      # Best one so far, save it but keep looking for a better one
+-      ac_cv_path_GREP="$ac_path_GREP"
+-      ac_path_GREP_max=$ac_count
+-    fi
+-    # 10*(2^10) chars as input seems more than enough
+-    test $ac_count -gt 10 && break
+-  done
+-  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
+-esac
++  ac_check_lib_save_LIBS=$LIBS
++LIBS="-lpq  $LIBS"
++cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
+ 
+-      $ac_path_GREP_found && break 3
+-    done
+-  done
+-  done
+-IFS=$as_save_IFS
+-  if test -z "$ac_cv_path_GREP"; then
+-    as_fn_error $? "no acceptable grep could be found in $PATH$PATH_SEPARATOR/usr/xpg4/bin" "$LINENO" 5
+-  fi
++/* Override any GCC internal prototype to avoid an error.
++   Use char because int might match the return type of a GCC
++   builtin and then its argument prototype would still apply.  */
++#ifdef __cplusplus
++extern "C"
++#endif
++char PQconnectStart ();
++int
++main ()
++{
++return PQconnectStart ();
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_link "$LINENO"; then :
++  ac_cv_lib_pq_PQconnectStart=yes
+ else
+-  ac_cv_path_GREP=$GREP
++  ac_cv_lib_pq_PQconnectStart=no
+ fi
+-
++rm -f core conftest.err conftest.$ac_objext \
++    conftest$ac_exeext conftest.$ac_ext
++LIBS=$ac_check_lib_save_LIBS
+ fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_GREP" >&5
+-$as_echo "$ac_cv_path_GREP" >&6; }
+- GREP="$ac_cv_path_GREP"
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pq_PQconnectStart" >&5
++$as_echo "$ac_cv_lib_pq_PQconnectStart" >&6; }
++if test "x$ac_cv_lib_pq_PQconnectStart" = xyes; then :
+ 
++						PGSQL_SUPPORT="yes"
++						TEMP_LIBS="$TEMP_LIBS -L$PGSQL_LIBDIR -lpq"
++						TEMP_CFLAGS="$TEMP_CFLAGS -I$PGSQL_INCDIR"
++
++$as_echo "#define HAVE_PGSQL 1" >>confdefs.h
+ 
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for egrep" >&5
+-$as_echo_n "checking for egrep... " >&6; }
+-if ${ac_cv_path_EGREP+:} false; then :
+-  $as_echo_n "(cached) " >&6
+-else
+-  if echo a | $GREP -E '(a|b)' >/dev/null 2>&1
+-   then ac_cv_path_EGREP="$GREP -E"
+-   else
+-     if test -z "$EGREP"; then
+-  ac_path_EGREP_found=false
+-  # Loop through the user's path and test for each of PROGNAME-LIST
+-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+-for as_dir in $PATH$PATH_SEPARATOR/usr/xpg4/bin
+-do
+-  IFS=$as_save_IFS
+-  test -z "$as_dir" && as_dir=.
+-    for ac_prog in egrep; do
+-    for ac_exec_ext in '' $ac_executable_extensions; do
+-      ac_path_EGREP="$as_dir/$ac_prog$ac_exec_ext"
+-      { test -f "$ac_path_EGREP" && $as_test_x "$ac_path_EGREP"; } || continue
+-# Check for GNU ac_path_EGREP and select it if it is found.
+-  # Check for GNU $ac_path_EGREP
+-case `"$ac_path_EGREP" --version 2>&1` in
+-*GNU*)
+-  ac_cv_path_EGREP="$ac_path_EGREP" ac_path_EGREP_found=:;;
+-*)
+-  ac_count=0
+-  $as_echo_n 0123456789 >"conftest.in"
+-  while :
+-  do
+-    cat "conftest.in" "conftest.in" >"conftest.tmp"
+-    mv "conftest.tmp" "conftest.in"
+-    cp "conftest.in" "conftest.nl"
+-    $as_echo 'EGREP' >> "conftest.nl"
+-    "$ac_path_EGREP" 'EGREP$' < "conftest.nl" >"conftest.out" 2>/dev/null || break
+-    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
+-    as_fn_arith $ac_count + 1 && ac_count=$as_val
+-    if test $ac_count -gt ${ac_path_EGREP_max-0}; then
+-      # Best one so far, save it but keep looking for a better one
+-      ac_cv_path_EGREP="$ac_path_EGREP"
+-      ac_path_EGREP_max=$ac_count
+-    fi
+-    # 10*(2^10) chars as input seems more than enough
+-    test $ac_count -gt 10 && break
+-  done
+-  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
+-esac
+ 
+-      $ac_path_EGREP_found && break 3
+-    done
+-  done
+-  done
+-IFS=$as_save_IFS
+-  if test -z "$ac_cv_path_EGREP"; then
+-    as_fn_error $? "no acceptable egrep could be found in $PATH$PATH_SEPARATOR/usr/xpg4/bin" "$LINENO" 5
+-  fi
+ else
+-  ac_cv_path_EGREP=$EGREP
++  as_fn_error $? "PostgreSQL support can't build without PostgreSQL libraries" "$LINENO" 5
+ fi
+ 
+-   fi
++			LDFLAGS=""
++			CFLAGS=$saved_CFLAGS
++			LIBS=$saved_LIBS
++		fi
++
++	fi # end pgsql-include , pgsql-libs
++
++# end PostgreSQL detection
+ fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_EGREP" >&5
+-$as_echo "$ac_cv_path_EGREP" >&6; }
+- EGREP="$ac_cv_path_EGREP"
+ 
+ 
++#Checks for header files.
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ANSI C header files" >&5
+ $as_echo_n "checking for ANSI C header files... " >&6; }
+ if ${ac_cv_header_stdc+:} false; then :
+@@ -5442,23 +6100,6 @@ $as_echo "#define STDC_HEADERS 1" >>confdefs.h
+ 
+ fi
+ 
+-# On IRIX 5.3, sys/types and inttypes.h are conflicting.
+-for ac_header in sys/types.h sys/stat.h stdlib.h string.h memory.h strings.h \
+-		  inttypes.h stdint.h unistd.h
+-do :
+-  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+-ac_fn_c_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default
+-"
+-if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+-  cat >>confdefs.h <<_ACEOF
+-#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+-_ACEOF
+-
+-fi
+-
+-done
+-
+-
+ for ac_header in stdio.h unistd.h stdint.h fcntl.h time.h signal.h sys/ioctl.h sys/mman.h linux/videodev.h linux/videodev2.h sys/param.h sys/types.h
+ do :
+   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+@@ -7544,4 +8185,3 @@ echo "LDFLAGS: $LDFLAGS"
+ echo
+ echo  "Install prefix:       $prefix"
+ echo
+-
+diff --git a/configure.ac b/configure.ac
+index 44211f8..a92e8b8 100755
+--- a/configure.ac
++++ b/configure.ac
+@@ -1,6 +1,7 @@
+ # Process this file with autoconf to produce a configure script
+ 
+ AC_INIT(motion, esyscmd(['./version.sh']))
++AC_GNU_SOURCE
+ AC_CONFIG_SRCDIR([motion.c])
+ AC_CONFIG_HEADERS(config.h)
+ AC_PROG_CC
+@@ -45,7 +46,7 @@ if test "${Darwin}" = ""; then
+ 		if test "${LINUXTHREADS}" = "no"; then
+ 			AC_MSG_CHECKING(Linuxthreads)
+ 			AC_MSG_RESULT(skipping)
+-		else	
++		else
+ 			THREAD_CHECK="/usr/local/include/pthread/linuxthreads/pthread.h"
+ 			THREAD_LIB_CHECK="/usr/local/lib/liblthread.so"
+ 		fi
+@@ -53,9 +54,9 @@ if test "${Darwin}" = ""; then
+ 		if test "${PWCBSD}" != "no"; then
+ 			VIDEO="video.o video2.o video_common.o"
+ 			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include -DPWCBSD"
+-		else 
++		else
+ 			VIDEO="video_freebsd.o"
+-			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include"	
++			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include"
+ 		fi
+ 
+ 		TEMP_LDFLAGS="${LDFLAGS} -L/usr/local/lib"
+@@ -95,7 +96,7 @@ if test "${FreeBSD}" != "" && test "${PWCBSD}" = "no"; then
+ 		TEMP_CFLAGS="${TEMP_CFLAGS} -DOLD_BKTR"
+ 	fi
+ #
+-# Check to Exclude BKTR 
++# Check to Exclude BKTR
+ #
+ BKTR="yes"
+ AC_ARG_WITH(bktr,
+@@ -107,7 +108,7 @@ BKTR="$withval"
+ )
+ 
+ 	if test "${BKTR}" = "no"; then
+-        	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
+ 	fi
+ 
+ else
+@@ -139,10 +140,10 @@ AC_MSG_CHECKING(for linuxthreads)
+ # Check for thread header
+ #
+ 	if test -f "${THREAD_CHECK}"; then
+-       	HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
+-       	THREADS="yes"
++		HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
++		THREADS="yes"
+ 	else
+-       	THREADS="no"
++		THREADS="no"
+ 	fi
+ 
+ #
+@@ -152,7 +153,7 @@ AC_MSG_CHECKING(for linuxthreads)
+ 		THREADS="yes"
+ 		LIB_THREAD="-llthread -llgcc_r"
+ 	else
+-       	THREADS="no"
++		THREADS="no"
+ 	fi
+ 
+ # Checks for Library linuxthreads for FreeBSD
+@@ -198,12 +199,12 @@ if test x$PTHREAD_LIB != xyes; then
+ 	fi
+ 	PTHREAD_SUPPORT="yes"
+ fi
+-	AC_MSG_RESULT($PTHREAD_SUPPORT)                        
++	AC_MSG_RESULT($PTHREAD_SUPPORT)
+ 
+ else
+-	echo 
++	echo
+ 	echo "You do not have threads support"
+-	echo	
++	echo
+ fi
+ 
+ 
+@@ -317,7 +318,7 @@ if test "${JPEG_MMX}" = "no" || test x$JPEG_SUPPORT != xyes; then
+ elif test "${JPEG_MMX}" = "yes"; then
+ 	# AUTODETECT STATIC LIB
+ 	AC_MSG_CHECKING(for libjpeg-mmx autodetecting)
+-	
++
+ 	if test -f /usr/lib/libjpeg-mmx.a ; then
+ 		AC_MSG_RESULT(found)
+ 		JPEG_MMX_OK="found"
+@@ -329,8 +330,8 @@ elif test "${JPEG_MMX}" = "yes"; then
+ 	else
+ 		AC_MSG_RESULT(not found)
+ 	fi
+-else	
+-	AC_MSG_CHECKING(for libjpeg-mmx in -> [${JPEG_MMX}] <-)	
++else
++	AC_MSG_CHECKING(for libjpeg-mmx in -> [${JPEG_MMX}] <-)
+ 	if test -f ${JPEG_MMX}/libjpeg-mmx.a ; then
+ 		AC_MSG_RESULT(found)
+ 		JPEG_MMX_OK="found"
+@@ -375,12 +376,13 @@ fi
+ #
+ # Check for libavcodec and libavformat from ffmpeg
+ #
++
+ FFMPEG_DIR="yes"
+ FFMPEG_OK="no_found"
+ FFMPEG_OBJ=""
+ AC_ARG_WITH(ffmpeg,
+ [  --with-ffmpeg[=DIR]       Specify the prefix for the install path for
+-                          libavcodec/libavformat (part of ffmpeg) be able to 
++                          libavcodec/libavformat (part of ffmpeg) be able to
+                           encode mpeg movies realtime.
+                           If this is not specified motion will try to find
+                           the libraries in /usr and /usr/local.
+@@ -388,7 +390,7 @@ AC_ARG_WITH(ffmpeg,
+ FFMPEG_DIR="$withval"
+ )
+ 
+-# 
++#
+ # ffmpeg headers custom location
+ #
+ FFMPEG_HEADERS_DIR="yes"
+@@ -401,7 +403,7 @@ FFMPEG_HEADERS_DIR="$withval"
+ #
+ # ffmpeg custom extra libraries
+ #
+-FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz "
++FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz -lswscale "
+ AC_ARG_WITH(ffmpeg-libs,
+ [  --with-ffmpeg-libs[=libs]  Specify the extra libs for ffmpeg
+                                ],
+@@ -418,7 +420,7 @@ if test "${FFMPEG_DIR}" = "no"; then
+ # with-ffmpeg=<dir> or nothing
+ #
+ else if test "${FFMPEG_DIR}" = "yes"; then
+-	# AUTODETECT STATIC/SHARED LIB 
++	# AUTODETECT STATIC/SHARED LIB
+ 	AC_MSG_CHECKING(for ffmpeg autodetecting libraries)
+ 
+ 	if test -f /usr/lib64/libavcodec.a -o -f /usr/lib64/libavcodec.so && test -f /usr/lib64/libavformat.a -o -f /usr/lib64/libavformat.so ; then
+@@ -445,7 +447,7 @@ else if test "${FFMPEG_DIR}" = "yes"; then
+         AC_MSG_RESULT(found in /usr/lib/i386-linux-gnu)
+         FFMPEG_OK="found"
+         FFMPEG_LIB="/usr/lib/i386-linux-gnu"
+-        FFMPEG_DIR="/usr"	
++        FFMPEG_DIR="/usr"
+ 	else
+ 		AC_MSG_RESULT(not found)
+ 		echo ""
+@@ -457,8 +459,8 @@ else if test "${FFMPEG_DIR}" = "yes"; then
+ 		echo "* Please read the Motion Guide for help:     *"
+ 		echo "* http://motion.sourceforge.net              *"
+ 		echo "**********************************************"
+-		echo ""		
+-	fi 
++		echo ""
++	fi
+ else
+ 	AC_MSG_CHECKING(for ffmpeg libraries in -> [${FFMPEG_DIR}] <-)
+ 	if test -f ${FFMPEG_DIR}/lib/libavcodec.a -o -f ${FFMPEG_DIR}/lib/libavcodec.so && test -f ${FFMPEG_DIR}/lib/libavformat.a -o -f ${FFMPEG_DIR}/lib/libavformat.so ; then
+@@ -518,12 +520,12 @@ if test "${FFMPEG_OK}" = "found"; then
+     elif test -f ${FFMPEG_DIR}/include/libavformat/avformat.h; then
+         AC_MSG_RESULT(found ${FFMPEG_DIR}/include/libavformat/avformat.h)
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat" 
++        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat"
+         AVFORMAT_DIR="${FFMPEG_DIR}/include/libavformat/avformat.h"
+     elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
+         AC_MSG_RESULT(found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h)
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat" 
++        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat"
+         AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h"
+     elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
+         AC_MSG_RESULT(found ${FFMPEG_DIR}/libavformat/avformat.h)
+@@ -545,10 +547,10 @@ if test "${FFMPEG_OK}" = "found"; then
+     fi
+ 
+ #
+-# If ffmpeg libs and headers have been found 
++# If ffmpeg libs and headers have been found
+ #
+ 
+-    if  test "${FFMPEG_OK}" = "found"; then	
++    if  test "${FFMPEG_OK}" = "found"; then
+         TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} ${FFMPEG_EXTRALIBS}"
+         TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
+         TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
+@@ -556,54 +558,13 @@ if test "${FFMPEG_OK}" = "found"; then
+         FFMPEG_OBJ="ffmpeg.o"
+         AC_SUBST(FFMPEG_OBJ)
+ 
+-        AC_MSG_CHECKING(avformat version 55)
+-        AC_RUN_IFELSE([AC_LANG_SOURCE([
+-            [
+-             #include <${AVFORMAT_DIR}>
+-             int main(void){
+-                 if (LIBAVFORMAT_VERSION_MAJOR >= 55) return -1;
+-                 return 0;
+-             }
+-            ]])],
+-            [            
+-            AC_MSG_RESULT(no)
+-            AC_MSG_CHECKING(avformat version 53/54)
+-            AC_RUN_IFELSE([AC_LANG_SOURCE([
+-            [
+-             #include <${AVFORMAT_DIR}>
+-             int main(void){
+-                 if ((LIBAVFORMAT_VERSION_MAJOR = 53) || (LIBAVFORMAT_VERSION_MAJOR = 54)) return -1;
+-                 return 0;
+-             }
+-            ]])],
+-            [AC_MSG_RESULT(no)],
+-            [
+-             AC_MSG_RESULT(yes)
+-             TEMP_CFLAGS="${TEMP_CFLAGS} -DAVFMT_V53"
+-             RTPS_OBJ="netcam_rtsp.o"
+-             AC_SUBST(RTPS_OBJ)
+-            ]
+-            )
+-            ],
+-            [
+-             AC_MSG_RESULT( yes version 55 or higher)
+-             TEMP_CFLAGS="${TEMP_CFLAGS} -DFFMPEG_V55"
+-             RTPS_OBJ="netcam_rtsp.o"
+-             AC_SUBST(RTPS_OBJ)
+-            ]
+-        )
+-
+-        
+-
+-
+-
+         AC_MSG_CHECKING([file_protocol is defined in ffmpeg ?])
+         saved_CFLAGS=$CFLAGS
+         saved_LIBS=$LIBS
+ 
+         CFLAGS="${FFMPEG_CFLAGS} ${AVFORMAT}"
+         LIBS="$TEMP_LIBS"
+-    	
++
+         AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+             [
+              #include <${AVFORMAT_DIR}>
+@@ -622,9 +583,14 @@ if test "${FFMPEG_OK}" = "found"; then
+         CFLAGS=$saved_CFLAGS
+         LIBS=$saved_LIBS
+     fi
+-fi	
++fi
+ fi
+ 
++# Revised RTSP module so that it can be included
++# whether or not FFMPEG is found.
++
++    RTPS_OBJ="netcam_rtsp.o"
++    AC_SUBST(RTPS_OBJ)
+ 
+ #
+ # Check SQLITE3
+@@ -655,7 +621,7 @@ else
+ 
+     CFLAGS=$saved_CFLAGS
+     LIBS=$saved_LIBS
+-fi    
++fi
+ 
+ 
+ #
+@@ -725,13 +691,13 @@ else
+ 			fi
+ 		done
+ 	elif test "${MYSQL_HEADERS}" = "no"; then
+-		AC_MSG_CHECKING(for mysql headers)	
++		AC_MSG_CHECKING(for mysql headers)
+ 		AC_MSG_RESULT(skipped)
+ 	else
+ 		AC_MSG_CHECKING(for mysql headers in $MYSQL_HEADERS)
+ 		# Manual detection for <withval>
+-        	if test -f $MYSQL_HEADERS/mysql.h; then
+-                	MYSQL_INCDIR=$MYSQL_HEADERS
++		if test -f $MYSQL_HEADERS/mysql.h; then
++			MYSQL_INCDIR=$MYSQL_HEADERS
+ 	        fi
+ 	fi
+ 
+@@ -750,7 +716,7 @@ else
+ 	# ******* Search mysql libs *********
+ 	if test "${MYSQL_LIBS}" = "yes"; then
+ 		AC_MSG_CHECKING(autodect mysql libs)
+-        	# Autodetect
++		# Autodetect
+ 		for w in /usr/lib64 /usr/lib /usr/local/lib /usr/mysql /usr/local/mysql /usr/local/mysql/lib /opt /opt/mysql /usr/lib/x86_64-linux-gnu; do
+ 			# check for plain setups
+ 			if test -f $w/libmysqlclient.a -o -f $w/libmysqlclient.so; then
+@@ -769,7 +735,7 @@ else
+ 			fi
+ 		done
+ 	elif test "${MYSQL_LIBS}" = "no"; then
+-        	AC_MSG_CHECKING(for mysql libs)
++		AC_MSG_CHECKING(for mysql libs)
+ 	        AC_MSG_RESULT(skipped)
+ 	else
+ 		AC_MSG_CHECKING(for mysql libs in $MYSQL_LIBS)
+@@ -790,13 +756,13 @@ else
+ 		saved_LIBS=$LIBS
+ 		CFLAGS="-I$MYSQL_INCDIR"
+ 		LIBS="-L$MYSQL_LIBDIR"
+-		AC_CHECK_LIB(mysqlclient,mysql_init,[	
++		AC_CHECK_LIB(mysqlclient,mysql_init,[
+ 					TEMP_LIBS="$TEMP_LIBS -L$MYSQL_LIBDIR -lmysqlclient -lz"
+ 					TEMP_CFLAGS="$TEMP_CFLAGS -I$MYSQL_INCDIR"
+ 					MYSQL_SUPPORT="yes"
+ 					AC_DEFINE([HAVE_MYSQL],1,[Define to 1 if you have MySQL support])
+ 					],
+-					AC_MSG_ERROR(MySQL support can't build without MySQL libraries))	
++					AC_MSG_ERROR(MySQL support can't build without MySQL libraries))
+ 		CFLAGS=$saved_CFLAGS
+ 		LIBS=$saved_LIBS
+ 	fi
+@@ -863,15 +829,15 @@ else
+ 			el[]PGSQL_INC_CHK(/include/postgresql)
+ 			fi
+ 		done
+-		
++
+ 	elif test "${PGSQL_HEADERS}" = "no"; then
+-		AC_MSG_CHECKING(for pgsql headers)	
++		AC_MSG_CHECKING(for pgsql headers)
+ 		AC_MSG_RESULT(skipped)
+ 	else
+ 		AC_MSG_CHECKING(for pgsql headers in $PGSQL_HEADERS)
+ 		# Manual detection for <withval>
+-        	if test -f $PGSQL_HEADERS/libpq-fe.h; then
+-                	PGSQL_INCDIR=$PGSQL_HEADERS
++		if test -f $PGSQL_HEADERS/libpq-fe.h; then
++			PGSQL_INCDIR=$PGSQL_HEADERS
+ 	        fi
+ 	fi
+ 
+@@ -897,10 +863,10 @@ else
+ 			if test -f /usr/lib64/libpq.so ; then
+ 				PGSQL_LIBDIR=/usr/lib64
+ 			elif test -f $PGSQL_DIR/lib/pgsql/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql 
++				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql
+ 			elif test -f $PGSQL_DIR/lib/postgresql/libpq.so ; then
+ 				PGSQL_LIBDIR=$PGSQL_DIR/lib/postgresql
+-			elif test -f $PGSQL_DIR/lib/libpq.so ; then	
++			elif test -f $PGSQL_DIR/lib/libpq.so ; then
+ 				PGSQL_LIBDIR=$PGSQL_DIR/lib
+ 			else
+ 				PGSQL_LIBDIR=""
+@@ -909,7 +875,7 @@ else
+ 			AC_MSG_RESULT($PGSQL_LIBDIR)
+ 
+ 		elif test "${PGSQL_LIBS}" = "no"; then
+-	        	AC_MSG_CHECKING(for pgsql libs)
++			AC_MSG_CHECKING(for pgsql libs)
+ 		        AC_MSG_RESULT(skipped)
+ 		else
+ 			AC_MSG_CHECKING(for pgsql libs in $PGSQL_LIBS)
+@@ -934,13 +900,13 @@ else
+ 						TEMP_LIBS="$TEMP_LIBS -L$PGSQL_LIBDIR -lpq"
+ 						TEMP_CFLAGS="$TEMP_CFLAGS -I$PGSQL_INCDIR"
+ 						AC_DEFINE([HAVE_PGSQL],1,[Define to 1 if you have PostgreSQL support])
+-					], 
++					],
+ 			AC_MSG_ERROR(PostgreSQL support can't build without PostgreSQL libraries))
+-			LDFLAGS=""	
++			LDFLAGS=""
+ 			CFLAGS=$saved_CFLAGS
+ 			LIBS=$saved_LIBS
+ 		fi
+-		
++
+ 	fi # end pgsql-include , pgsql-libs
+ 
+ # end PostgreSQL detection
+@@ -961,17 +927,17 @@ if test "${V4L}" = "no"; then
+ 	AC_MSG_CHECKING(for V42L support)
+ 	AC_MSG_RESULT(skipping)
+ else
+-	AC_CHECK_TYPE([struct v4l2_buffer], 
+-        	      [SUPPORTED_V4L2=true],
+-             	 [SUPPORTED_V4L2=false],
+-	       	 [#include <sys/time.h>
++	AC_CHECK_TYPE([struct v4l2_buffer],
++		[SUPPORTED_V4L2=true],
++		[SUPPORTED_V4L2=false],
++		[#include <sys/time.h>
+ 			#include <linux/videodev.h>])
+ 
+ 	AC_MSG_CHECKING(for V42L support)
+ 	if test x$SUPPORTED_V4L2 = xtrue; then
+ 		AC_MSG_RESULT(yes)
+ 		TEMP_CFLAGS="${TEMP_CFLAGS} -DMOTION_V4L2"
+-	else	
++	else
+ 		AC_MSG_RESULT(no)
+ 	fi
+ 
+@@ -1097,12 +1063,12 @@ if test -e "/proc/cpuinfo" ; then
+ 	amd[[1543]]="-march=athlon64"
+ 	amd[[1544]]="-march=athlon64"
+ 	amd[[1565]]="-march=opteron"
+-	amd[[1572]]="-march=k8" 
++	amd[[1572]]="-march=k8"
+ 	via[[67]]="-march=c3"
+ 	via[[68]]="-march=c3"
+-	via[[69]]="-march=i686" 
++	via[[69]]="-march=i686"
+ 	via[[610]]="-march=i686"
+-	
++
+ 	CPU_TYPE="known"
+ 	CPU_FAMILY=`cat /proc/cpuinfo | grep "cpu family" | head -n1`
+ 	CPU_MODEL=`cat /proc/cpuinfo | grep model[[^\ ]] | head -n1`
+@@ -1266,7 +1232,7 @@ AC_LINK_IFELSE([
+ 		TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_BSWAP"
+ 		AC_MSG_RESULT(yes)
+ 	],
+-	[ 
++	[
+ 		AC_MSG_RESULT(no)
+ 	])
+ 
+@@ -1321,14 +1287,14 @@ echo "   **************************"
+ echo "      Configure status       "
+ echo "      ${PACKAGE_NAME} ${PACKAGE_VERSION}"
+ echo "   **************************"
+-echo 
++echo
+ 
+ 
+ if test "${Darwin}" != ""; then
+     echo "OS             :     Darwin"
+ elif test "${FreeBSD}" != ""; then
+-    echo "OS             :     *BSD"		
+-else 
++    echo "OS             :     *BSD"
++else
+     echo "OS             :     Linux"
+ fi
+ 
+@@ -1338,7 +1304,7 @@ else
+     echo "pthread support:     No"
+     echo "**********************************************"
+     echo "** Fatal Error YOU MUST HAVE pthread Support *"
+-    echo "**********************************************" 
++    echo "**********************************************"
+ fi
+ 
+ 
+@@ -1376,7 +1342,7 @@ else
+ 	fi
+ 
+ 	if test x$SUPPORTED_V4L2 = xtrue; then
+-        echo "V4L2 support:        Yes"	
++        echo "V4L2 support:        Yes"
+ 	else
+         echo "V4L2 support:        No"
+ 	fi
+@@ -1411,11 +1377,10 @@ if test "${PGSQL_SUPPORT}" = "yes"; then
+ else
+     echo "PostgreSQL support:  No"
+ fi
+-echo 
++echo
+ echo "CFLAGS: $CFLAGS"
+ echo "LIBS: $LIBS"
+ echo "LDFLAGS: $LDFLAGS"
+ echo
+ echo  "Install prefix:       $prefix"
+ echo
+-
+diff --git a/ffmpeg.c b/ffmpeg.c
+index 492fe8e..6127542 100644
+--- a/ffmpeg.c
++++ b/ffmpeg.c
+@@ -14,7 +14,7 @@
+ 
+ #include "ffmpeg.h"
+ #include "motion.h"
+- 
++
+ #if LIBAVCODEC_BUILD > 4680
+ /*
+  * FFmpeg after build 4680 doesn't have support for mpeg1 videos with
+@@ -154,13 +154,13 @@ URLProtocol mpeg1_file_protocol = {
+ 
+ #endif // FF_API_NEW_AVIO
+ /****************************************************************************
+- *  The section below is the "my" section of functions.  
+- *  These are designed to be extremely simple version specific 
++ *  The section below is the "my" section of functions.
++ *  These are designed to be extremely simple version specific
+  *  variants of the libav functions.
+  ****************************************************************************/
+ AVFrame *my_frame_alloc(void){
+     AVFrame *pic;
+-#ifdef FFMPEG_V55
++#if (LIBAVFORMAT_VERSION_MAJOR >= 55)
+     pic = av_frame_alloc();
+ #else
+     pic = avcodec_alloc_frame();
+@@ -168,8 +168,8 @@ AVFrame *my_frame_alloc(void){
+     return pic;
+ }
+ 
+-void my_frame_free(AVFrame *frame){    
+-#ifdef FFMPEG_V55
++void my_frame_free(AVFrame *frame){
++#if (LIBAVFORMAT_VERSION_MAJOR >= 55)
+     av_frame_free(&frame);
+ #else
+     //avcodec_free_frame(&frame);
+@@ -378,7 +378,7 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+     snprintf(ffmpeg->codec, sizeof(ffmpeg->codec), "%s", ffmpeg_video_codec);
+ 
+     /* Allocation the output media context. */
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++#if (LIBAVFORMAT_VERSION_MAJOR >= 53)
+     ffmpeg->oc = avformat_alloc_context();
+ #else
+     ffmpeg->oc = av_alloc_format_context();
+@@ -420,10 +420,10 @@ struct ffmpeg *ffmpeg_open(char *ffmpeg_video_codec, char *filename,
+ 
+     ffmpeg->c     = c = AVSTREAM_CODEC_PTR(ffmpeg->video_st);
+     c->codec_id   = ffmpeg->oc->oformat->video_codec;
+-#if LIBAVCODEC_VERSION_MAJOR < 53    
+-    c->codec_type = CODEC_TYPE_VIDEO;
+-#else
++#if (LIBAVFORMAT_VERSION_MAJOR >= 53)
+     c->codec_type = AVMEDIA_TYPE_VIDEO;
++#else
++    c->codec_type = CODEC_TYPE_VIDEO;
+ #endif    
+     is_mpeg1      = c->codec_id == CODEC_ID_MPEG1VIDEO;
+ 
+@@ -864,7 +864,7 @@ void ffmpeg_deinterlace(unsigned char *img, int width, int height)
+     picture.linesize[2] = width2;
+ 
+     /* We assume using 'PIX_FMT_YUV420P' always */
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++#if (LIBAVFORMAT_VERSION_MAJOR >= 53)
+     MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Deinterlace depreciated for recent versions of FFMPEG.");
+ #else
+     avpicture_deinterlace(&picture, &picture, PIX_FMT_YUV420P, width, height);
+diff --git a/ffmpeg.h b/ffmpeg.h
+index 86f4ec9..c64fd9e 100644
+--- a/ffmpeg.h
++++ b/ffmpeg.h
+@@ -95,7 +95,9 @@ void ffmpeg_deinterlace(unsigned char *, int, int);
+ /* Setup an avcodec log handler. */
+ void ffmpeg_avcodec_log(void *, int, const char *, va_list);
+ 
++#ifdef HAVE_FFMPEG
+ AVFrame *my_frame_alloc(void);
+ void my_frame_free(AVFrame *frame);
++#endif
+ 
+ #endif /* _INCLUDE_FFMPEG_H_ */
+diff --git a/git-commit-version.sh b/git-commit-version.sh
+new file mode 100755
+index 0000000..2a47df1
+--- /dev/null
++++ b/git-commit-version.sh
+@@ -0,0 +1,5 @@
++#!/bin/sh
++
++SNV_VERSION=`git show -s --format=%H`
++echo -n "Git-$SNV_VERSION"
++
+diff --git a/motion-dist.conf.in b/motion-dist.conf.in
+index 630cbf8..51f4221 100644
+--- a/motion-dist.conf.in
++++ b/motion-dist.conf.in
+@@ -101,7 +101,7 @@ framerate 2
+ # This option is used when you want to capture images at a rate lower than 2 per second.
+ minimum_frame_time 0
+ 
+-# URL to use if you are using a network camera, size will be autodetected (incl http:// ftp:// mjpg:// rstp:// or file:///)
++# URL to use if you are using a network camera, size will be autodetected (incl http:// ftp:// mjpg:// rtsp:// mjpeg:// or file:///)
+ # Must be a URL that returns single jpeg pictures or a raw mjpeg stream. Default: Not defined
+ ; netcam_url value
+ 
+@@ -125,6 +125,10 @@ netcam_keepalive off
+ # Default: off
+ netcam_tolerant_check off
+ 
++# RTSP connection uses TCP to communicate to the camera. Can prevent image corruption.
++# Default: on
++rtsp_uses_tcp on
++
+ # Let motion regulate the brightness of a video device (default: off).
+ # The auto_brightness feature uses the brightness option as its target value.
+ # If brightness is zero auto_brightness will adjust to average brightness value 128.
+diff --git a/motion.logrotate b/motion.logrotate
+deleted file mode 100644
+index b97f2f3..0000000
+--- a/motion.logrotate
++++ /dev/null
+@@ -1,10 +0,0 @@
+-/var/log/motion.log {
+-    missingok
+-    notifempty
+-    compress
+-    size 10M
+-    create 0600 root root
+-    postrotate
+-        /bin/service motion reload  >/dev/null  2>&1 || true
+-    endscript
+-}
+diff --git a/netcam.c b/netcam.c
+index 843bc8f..3c2b481 100644
+--- a/netcam.c
++++ b/netcam.c
+@@ -45,9 +45,7 @@
+ #include <sys/socket.h>
+ 
+ #include "netcam_ftp.h"
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+ #include "netcam_rtsp.h"
+-#endif
+ 
+ #define CONNECT_TIMEOUT        10     /* Timeout on remote connection attempt */
+ #define READ_TIMEOUT            5     /* Default timeout on recv requests */
+@@ -149,13 +147,9 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+ {
+     char *s;
+     int i;
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+-    const char *re = "(http|ftp|mjpg|rtsp)://(((.*):(.*))@)?"
+-                     "([^/:]|[-.a-z0-9]+)(:([0-9]+))?($|(/[^:]*))";
+-#else
+-    const char *re = "(http|ftp|mjpg)://(((.*):(.*))@)?"
++
++    const char *re = "(http|ftp|mjpg|mjpeg|rtsp)://(((.*):(.*))@)?"
+                      "([^/:]|[-.a-z0-9]+)(:([0-9]+))?($|(/[^:]*))";
+-#endif                     
+     regex_t pattbuf;
+     regmatch_t matches[10];
+ 
+@@ -211,10 +205,8 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+             parse_url->port = 80;
+         else if (!strcmp(parse_url->service, "ftp"))
+             parse_url->port = 21;
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+         else if (!strcmp(parse_url->service, "rtsp") && parse_url->port == 0)
+             parse_url->port = 554;
+-#endif            
+     }
+ 
+     regfree(&pattbuf);
+@@ -232,7 +224,7 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+  * Returns:             Nothing
+  *
+  */
+-static void netcam_url_free(struct url_t *parse_url)
++void netcam_url_free(struct url_t *parse_url)
+ {
+     if (parse_url->service) {
+         free(parse_url->service);
+@@ -1270,7 +1262,7 @@ static int netcam_read_html_jpeg(netcam_context_ptr netcam)
+                      * module netcam_wget.c to do this job!
+                      */
+ 
+-                    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO,
++                    MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO,
+                                "%s: Potential split boundary - "
+                                "%d chars flushed, %d "
+                                "re-positioned", ix,
+@@ -2017,24 +2009,29 @@ static void *netcam_handler_loop(void *arg)
+                  */
+             }
+         }
+-        
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++
+         if (netcam->caps.streaming == NCS_RTSP) {
+             if (netcam->rtsp->format_context == NULL) {      // We must have disconnected.  Try to reconnect
+-                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Attempting to reconnect");
+-                rtsp_connect(netcam);
++                if (netcam->rtsp->status == RTSP_CONNECTED){
++                    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Reconnecting with camera....");
++                }
++                netcam->rtsp->status = RTSP_RECONNECTING;
++                netcam_connect_rtsp(netcam);
+                 continue;
+             } else {
+                 // We think we are connected...
+                 if (netcam->get_image(netcam) < 0) {
+-                    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Bad image attempting to reconnect");
++                    if (netcam->rtsp->status == RTSP_CONNECTED){
++                        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Bad image.  Reconnecting with camera....");
++                    }
+                     //Nope.  We are not or got bad image.  Reconnect
+-                    rtsp_connect(netcam);
++                    netcam->rtsp->status = RTSP_RECONNECTING;
++                    netcam_connect_rtsp(netcam);
+                     continue;
+                 }
+             }
+         }
+-#endif
++
+         if (netcam->caps.streaming != NCS_RTSP) {
+             if (netcam->get_image(netcam) < 0) {
+                 MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error getting jpeg image");
+@@ -2433,100 +2430,6 @@ static int netcam_setup_ftp(netcam_context_ptr netcam, struct url_t *url)
+     return 0;
+ }
+ 
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+-static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+-{
+-  struct context *cnt = netcam->cnt;
+-  const char *ptr;
+-  int ret = -1;
+-
+-  netcam->caps.streaming = NCS_RTSP;
+-
+-  netcam->rtsp = rtsp_new_context();
+-
+-  if (netcam->rtsp == NULL) {
+-    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to create rtsp context");
+-    netcam_shutdown_rtsp(netcam);
+-    return -1;
+-  }
+-
+-  /*
+-   * Allocate space for a working string to contain the path.
+-   * The extra 5 is for "://", ":" and string terminator.
+-   */
+-
+-  // force port to a sane value
+-  if (netcam->connect_port > 65536) {
+-    netcam->connect_port = 65536;
+-  } else if (netcam->connect_port < 0) {
+-    netcam->connect_port = 0;
+-  }
+-
+-    if (cnt->conf.netcam_userpass != NULL) {
+-        ptr = cnt->conf.netcam_userpass;
+-    } else {
+-        ptr = url->userpass;  /* Don't set this one NULL, gets freed. */
+-    }
+-
+-    if (ptr != NULL) {
+-        char *cptr;
+-        if ((cptr = strchr(ptr, ':')) == NULL) {
+-            netcam->rtsp->user = mystrdup(ptr);
+-        } else {
+-            netcam->rtsp->user = mymalloc((cptr - ptr)+2);  //+2 for string terminator
+-            memcpy(netcam->rtsp->user, ptr,(cptr - ptr));
+-            netcam->rtsp->pass = mystrdup(cptr + 1);
+-        }
+-    }
+-
+-    /*
+-    Need a method to query the path and
+-    determine the authentication type if needed.
+-    avformat_open_input returns file not found when
+-    it wants authentication and it is not provided.
+-    right now, if user specified a password, we will
+-    prepend it onto the path to make it happier so we
+-    can at least try basic authentication.
+-    */
+-
+-    if ((netcam->rtsp->user != NULL) && (netcam->rtsp->pass != NULL)) {
+-        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
+-	          + 5 + strlen(url->path) + 5
+-              + strlen(netcam->rtsp->user) + strlen(netcam->rtsp->pass) + 4 );
+-        sprintf((char *)ptr, "%s://%s:%s@%s:%d%s",
+-                url->service,netcam->rtsp->user,netcam->rtsp->pass,
+-                netcam->connect_host, netcam->connect_port, url->path);
+-    }
+-    else {
+-        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
+-	          + 5 + strlen(url->path) + 5);
+-        sprintf((char *)ptr, "%s://%s:%d%s", url->service,
+-	        netcam->connect_host, netcam->connect_port, url->path);
+-    }
+-    netcam->rtsp->path = (char *)ptr;
+-
+-    netcam_url_free(url);
+-
+-    /*
+-     * Now we need to set some flags for the callback function.
+-     */
+-    netcam->rtsp->readingframe = 0;
+-
+-    /*
+-     * The RTSP context should be all ready to attempt a connection with
+-     * the server, so we try ....
+-     */
+-    ret = rtsp_connect(netcam);
+-    if (ret < 0){
+-        return ret;
+-    }
+-
+-    netcam->get_image = netcam_read_rtsp_image;
+-
+-  return 0;
+-}
+-#endif
+-
+ /**
+  * netcam_recv
+  *
+@@ -2707,10 +2610,9 @@ void netcam_cleanup(netcam_context_ptr netcam, int init_retry_flag)
+     if (netcam->response != NULL) 
+         free(netcam->response);
+ 
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+-    if ((netcam->caps.streaming == NCS_RTSP) && (netcam->rtsp->connected == 1))
++
++    if (netcam->caps.streaming == NCS_RTSP)
+         netcam_shutdown_rtsp(netcam);
+-#endif
+ 
+     pthread_mutex_destroy(&netcam->mutex);
+     pthread_cond_destroy(&netcam->cap_cond);
+@@ -2763,7 +2665,13 @@ int netcam_next(struct context *cnt, unsigned char *image)
+     }
+ 
+     if (netcam->caps.streaming == NCS_RTSP) {
+-    	memcpy(image, netcam->latest->ptr, netcam->latest->used);
++
++        if (netcam->rtsp->status == RTSP_RECONNECTING)
++            return NETCAM_NOTHING_NEW_ERROR;
++
++    	if (netcam_next_rtsp(image , netcam) < 0)
++            return NETCAM_GENERAL_ERROR | NETCAM_JPEG_CONV_ERROR;
++
+     	return 0;
+     }
+ 
+@@ -2944,16 +2852,20 @@ int netcam_start(struct context *cnt)
+ 
+         strcpy(url.service, "http"); /* Put back a real URL service. */
+         retval = netcam_setup_mjpg(netcam, &url);
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++    } else if ((url.service) && (!strcmp(url.service, "mjpeg"))) {
++        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: now calling"
++                   " netcam_setup_mjpeg()");
++
++        strcpy(url.service, "http"); /* Put back a real URL service. */
++        retval = netcam_setup_rtsp(netcam, &url);
+     } else if ((url.service) && (!strcmp(url.service, "rtsp"))) {
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: now calling"
+                     " netcam_setup_rtsp()");
+ 
+         retval = netcam_setup_rtsp(netcam, &url);
+-#endif        
+     } else {
+         MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: Invalid netcam service '%s' - "
+-                   "must be http, ftp, mjpg or file.", url.service);
++                   "must be http, ftp, mjpg, mjpeg or file.", url.service);
+         netcam_url_free(&url);
+         return -1;
+     }
+@@ -2971,12 +2883,13 @@ int netcam_start(struct context *cnt)
+     if ((retval = netcam->get_image(netcam)) != 0) {
+         MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: Failed trying to "
+                    "read first image - retval:%d", retval);
++        netcam->rtsp->status = RTSP_NOTCONNECTED;
+         return -1;
+     }
+ 
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++
+     if (netcam->caps.streaming != NCS_RTSP) {
+-#endif
++
+         /*
+         * If an error occurs in the JPEG decompression which follows this,
+         * jpeglib will return to the code within this 'if'.  If such an error
+@@ -2991,29 +2904,23 @@ int netcam_start(struct context *cnt)
+         netcam->netcam_tolerant_check = cnt->conf.netcam_tolerant_check;
+         netcam->JFIF_marker = 0;
+         netcam_get_dimensions(netcam);
++    }
++    /*
++    * Motion currently requires that image height and width is a
++    * multiple of 16. So we check for this.
++    */
++    if (netcam->width % 8) {
++        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: netcam image width (%d)"
++                   " is not modulo 8", netcam->width);
++        return -3;
++    }
+ 
+-        /*
+-        * Motion currently requires that image height and width is a
+-        * multiple of 16. So we check for this.
+-        */
+-        if (netcam->width % 8) {
+-            MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: netcam image width (%d)"
+-                       " is not modulo 8", netcam->width);
+-            return -3;
+-        }
+-
+-        if (netcam->height % 8) {
+-            MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: netcam image height (%d)"
+-                       " is not modulo 8", netcam->height);
+-            return -3;
+-        }
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
+-    } else {
+-        // not jpeg, get the dimensions
+-        netcam->width = netcam->rtsp->codec_context->width;
+-        netcam->height = netcam->rtsp->codec_context->height;
++    if (netcam->height % 8) {
++        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: netcam image height (%d)"
++                   " is not modulo 8", netcam->height);
++        return -3;
+     }
+-#endif
++    
+ 
+     /* Fill in camera details into context structure. */
+     cnt->imgs.width = netcam->width;
+diff --git a/netcam.h b/netcam.h
+index 6062edf..3612f1a 100644
+--- a/netcam.h
++++ b/netcam.h
+@@ -107,6 +107,11 @@ typedef struct file_context {
+ #define NCS_BLOCK               2  /* streaming is done via MJPG-block */
+ #define NCS_RTSP                3  /* streaming is done via RTSP */
+ 
++
++#define RTSP_NOTCONNECTED  0  /* The camera has never connected */
++#define RTSP_CONNECTED     1  /* The camera is currently connected */
++#define RTSP_RECONNECTING  2  /* The camera is trying to reconnect*/
++
+ /*
+  * struct netcam_context contains all the structures and other data
+  * for an individual netcam.
+@@ -297,5 +302,6 @@ int netcam_start (struct context *);
+ int netcam_next (struct context *, unsigned char *);
+ void netcam_cleanup (struct netcam_context *, int);
+ ssize_t netcam_recv(netcam_context_ptr, void *, size_t);
++void netcam_url_free(struct url_t *parse_url);
+ 
+ #endif
+diff --git a/netcam_rtsp.c b/netcam_rtsp.c
+index 6748a4f..4e5a55f 100644
+--- a/netcam_rtsp.c
++++ b/netcam_rtsp.c
+@@ -1,17 +1,81 @@
++/***********************************************************
++ *  In the top section are the functions that are used
++ *  when processing the RTSP camera feed.  Since these functions
++ *  are internal to the RTSP module, and many require FFmpeg
++ *  structures in their declarations, they are within the
++ *  HAVE_FFMPEG block that eliminates them entirely when
++ *  FFmpeg is not present.
++ *
++ *  The functions:
++ *      netcam_setup_rtsp
++ *      netcam_connect_rtsp
++ *      netcam_shutdown_rtsp
++ *      netcam_next_rtsp
++ *  are called from netcam.c therefore must be defined even
++ *  if FFmpeg is not present.  They must also not have FFmpeg
++ *  structures in the declarations.  Simple error
++ *  messages are raised if called when no FFmpeg is found.
++ *
++ ***********************************************************/
++
+ #include <stdio.h>
+ #include "netcam_rtsp.h"
+-#include "motion.h"
++#include "rotate.h"    /* already includes motion.h */
+ 
+-#if ((defined FFMPEG_V55) || (defined AVFMT_V53))
++#ifdef HAVE_FFMPEG
+ 
+ #include "ffmpeg.h"
+ 
+-/****************************************************
+- * Duplicated static functions - FIXME
+- ****************************************************/
++/**
++ * netcam_check_pixfmt
++ *
++ * Determine whether pix_format is YUV420P
++ */
++int netcam_check_pixfmt(netcam_context_ptr netcam){
++    int retcd;
+ 
++    retcd = -1;
++
++    if ((netcam->rtsp->codec_context->pix_fmt == PIX_FMT_YUV420P) ||
++        (netcam->rtsp->codec_context->pix_fmt == PIX_FMT_YUVJ420P)) retcd = 0;
++
++    return retcd;
++
++}
+ /**
+- * netcam_check_buffsize
++ * netcam_rtsp_null_context
++ *
++ * Null all the context
++ */
++void netcam_rtsp_null_context(netcam_context_ptr netcam){
++
++    netcam->rtsp->swsctx         = NULL;
++    netcam->rtsp->swsframe_in    = NULL;
++    netcam->rtsp->swsframe_out   = NULL;
++    netcam->rtsp->frame        = NULL;
++    netcam->rtsp->codec_context     = NULL;
++    netcam->rtsp->format_context    = NULL;
++
++}
++/**
++ * netcam_rtsp_close_context
++ *
++ * Close all the context that could be open
++ */
++void netcam_rtsp_close_context(netcam_context_ptr netcam){
++
++    if (netcam->rtsp->swsctx       != NULL) sws_freeContext(netcam->rtsp->swsctx);
++    if (netcam->rtsp->swsframe_in  != NULL) my_frame_free(netcam->rtsp->swsframe_in);
++    if (netcam->rtsp->swsframe_out != NULL) my_frame_free(netcam->rtsp->swsframe_out);
++    if (netcam->rtsp->frame        != NULL) my_frame_free(netcam->rtsp->frame);
++    if (netcam->rtsp->codec_context    != NULL) avcodec_close(netcam->rtsp->codec_context);
++    if (netcam->rtsp->format_context   != NULL) avformat_close_input(&netcam->rtsp->format_context);
++
++    netcam_rtsp_null_context(netcam);
++}
++
++/**
++ * netcam_buffsize_rtsp
+  *
+  * This routine checks whether there is enough room in a buffer to copy
+  * some additional data.  If there is not enough room, it will re-allocate
+@@ -23,8 +87,8 @@
+  *
+  * Returns:             Nothing
+  */
+-static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+-{
++static void netcam_buffsize_rtsp(netcam_buff_ptr buff, size_t numbytes){
++
+     int min_size_to_alloc;
+     int real_alloc;
+     int new_size;
+@@ -49,16 +113,28 @@ static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+     buff->size = new_size;
+ }
+ 
+-/****************************************************
+- * End Duplicated static functions - FIXME
+- ****************************************************/
+-
+-static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *frame, AVCodecContext *cc)
+-{
++/**
++ * decode_packet
++ *
++ * This routine takes in the packet from the read and decodes it into
++ * the frame.  It then takes the frame and copies it into the netcam
++ * buffer
++ *
++ * Parameters:
++ *      packet    The packet that was read from av_read
++ *      buffer    The buffer that is the final destination
++ *      frame     The frame into which we decode the packet
++ *
++ *
++ * Returns:
++ *      Failure    0(zero)
++ *      Success    The size of the frame decoded
++ */
++static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *frame, AVCodecContext *cc){
+     int check = 0;
+     int frame_size = 0;
+-    int ret = 0; 
+-    
++    int ret = 0;
++
+     ret = avcodec_decode_video2(cc, frame, &check, packet);
+     if (ret < 0) {
+         MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error decoding video packet");
+@@ -66,47 +142,69 @@ static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *fram
+     }
+ 
+     if (check == 0) {
+-        // no frame could be decoded...keep trying
+         return 0;
+     }
+ 
+     frame_size = avpicture_get_size(cc->pix_fmt, cc->width, cc->height);
+-    
+-    netcam_check_buffsize(buffer, frame_size);
+-    
++
++    netcam_buffsize_rtsp(buffer, frame_size);
++
+     avpicture_layout((const AVPicture*)frame,cc->pix_fmt,cc->width,cc->height
+-                    ,(unsigned char *)buffer->ptr,frame_size );    
++                    ,(unsigned char *)buffer->ptr,frame_size );
+ 
+     buffer->used = frame_size;
+ 
+     return frame_size;
+ }
+ 
+-static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AVMediaType type)
+-{
++/**
++ * netcam_open_codec
++ *
++ * This routine opens the codec context for the indicated stream
++ *
++ * Parameters:
++ *      stream_idx  The index of the stream that was found as "best"
++ *      fmt_ctx     The format context that was created upon opening the stream
++ *      type        The type of media type (This is a constant)
++ *
++ *
++ * Returns:
++ *      Failure    Error code from FFmpeg (Negative number)
++ *      Success    0(Zero)
++ */
++static int netcam_open_codec(int *stream_idx, AVFormatContext *fmt_ctx, enum AVMediaType type){
+     int ret;
++    char errstr[128];
+     AVStream *st;
+     AVCodecContext *dec_ctx = NULL;
+     AVCodec *dec = NULL;
++
+     ret = av_find_best_stream(fmt_ctx, type, -1, -1, NULL, 0);
+     if (ret < 0) {
+-		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream %s in input!", type);
++        av_strerror(ret, errstr, sizeof(errstr));
++		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream in input!: %s",errstr);
+         return ret;
+-    } else {
+-        *stream_idx = ret;
+-        st = fmt_ctx->streams[*stream_idx];
+-        /* find decoder for the stream */
+-        dec_ctx = st->codec;
+-        dec = avcodec_find_decoder(dec_ctx->codec_id);
+-        if (!dec) {
+-    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to find %s codec!", type);
+-            return ret;
+-        }
+-        if ((ret = avcodec_open2(dec_ctx, dec, NULL)) < 0) {
+-    		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to open %s codec!", type);
+-            return ret;
+-        }
+     }
++
++    *stream_idx = ret;
++    st = fmt_ctx->streams[*stream_idx];
++
++    /* find decoder for the stream */
++    dec_ctx = st->codec;
++    dec = avcodec_find_decoder(dec_ctx->codec_id);
++    if (dec == NULL) {
++        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to find codec!");
++        return -1;
++    }
++
++    /* Open the codec  */
++    ret = avcodec_open2(dec_ctx, dec, NULL);
++    if (ret < 0) {
++        av_strerror(ret, errstr, sizeof(errstr));
++    	MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to open codec!: %s", errstr);
++        return ret;
++    }
++
+     return 0;
+ }
+ 
+@@ -122,8 +220,7 @@ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AV
+ * Returns:     Pointer to the newly-created structure, NULL if error.
+ *
+ */
+-struct rtsp_context *rtsp_new_context(void)
+-{
++struct rtsp_context *rtsp_new_context(void){
+     struct rtsp_context *ret;
+ 
+     /* Note that mymalloc will exit on any problem. */
+@@ -133,9 +230,27 @@ struct rtsp_context *rtsp_new_context(void)
+ 
+     return ret;
+ }
+-
+-static int interrupt_cb(void *ctx)
+-{
++/**
++* netcam_interrupt_rtsp
++*
++*    This function is called during the FFmpeg blocking functions.
++*    These include the opening of the format context as well as the
++*    reading of the packets from the stream.  Since this is called
++*    during all blocking functions, the process uses the readingframe
++*    flag to determine whether to timeout the process.
++*
++* Parameters
++*
++*       ctx   We pass in the rtsp context to use it to look for the
++*             readingframe flag as well as the time that we started
++*             the read attempt.
++*
++* Returns:
++*       Failure    -1(which triggers an interupt)
++*       Success     0(zero which indicates to let process continue)
++*
++*/
++static int netcam_interrupt_rtsp(void *ctx){
+     struct rtsp_context *rtsp = (struct rtsp_context *)ctx;
+ 
+     if (rtsp->readingframe != 1) {
+@@ -143,10 +258,10 @@ static int interrupt_cb(void *ctx)
+     } else {
+         struct timeval interrupttime;
+         if (gettimeofday(&interrupttime, NULL) < 0) {
+-            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: get interrupt time");
++            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: get interrupt time failed");
+         }
+         if ((interrupttime.tv_sec - rtsp->startreadtime.tv_sec ) > 10){
+-            MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Timeout getting frame %d",interrupttime.tv_sec - rtsp->startreadtime.tv_sec);
++            MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Reading picture timed out for %s",rtsp->path);
+             return 1;
+         } else{
+             return 0;
+@@ -156,74 +271,27 @@ static int interrupt_cb(void *ctx)
+     //should not be possible to get here
+     return 0;
+ }
+-int rtsp_connect(netcam_context_ptr netcam)
+-{
+-
+-    int ret;    
+-    char errstr[128];
+-    
+-    netcam->rtsp->connected = 0;
+-    
+-    if (netcam->rtsp->path == NULL) {
+-        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Null path passed to connect (%s)", netcam->rtsp->path);
+-        return -1;
+-    }
+-
+-    // open the network connection
+-    AVDictionary *opts = 0;
+-    av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+-
+-    netcam->rtsp->format_context = avformat_alloc_context();
+-    netcam->rtsp->format_context->interrupt_callback.callback = interrupt_cb;
+-    netcam->rtsp->format_context->interrupt_callback.opaque = netcam->rtsp;
+-
+-    ret = avformat_open_input(&netcam->rtsp->format_context, netcam->rtsp->path, NULL, &opts);
+-    if (ret < 0) {
+-        av_strerror(ret, errstr, sizeof(errstr));
+-        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %s", netcam->rtsp->path,errstr);
+-        if (ret == -1094995529) MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Authentication?");
+-        av_dict_free(&opts);
+-        //The format context gets freed upon any error from open_input.        
+-        return ret;
+-    }    
+-    av_dict_free(&opts);
+-    
+-    // fill out stream information
+-    ret = avformat_find_stream_info(netcam->rtsp->format_context, NULL);
+-    if (ret < 0) {
+-        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to find stream info: %d", ret);
+-        avformat_close_input(&netcam->rtsp->format_context);
+-        return -1;
+-    }
+-
+-    ret = open_codec_context(&netcam->rtsp->video_stream_index, netcam->rtsp->format_context, AVMEDIA_TYPE_VIDEO);
+-    if (ret < 0) {
+-        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open codec context: %d", ret);
+-        avformat_close_input(&netcam->rtsp->format_context);
+-        avcodec_close(netcam->rtsp->codec_context);
+-        return -1;
+-    }
+-
+-    netcam->rtsp->codec_context = netcam->rtsp->format_context->streams[netcam->rtsp->video_stream_index]->codec;
+-
+-    netcam->rtsp->frame = my_frame_alloc();
+-    
+-    // start up the feed
+-    av_read_play(netcam->rtsp->format_context);
+-    
+-    netcam->rtsp->connected = 1;
+-
+-    return 0;
+-}
+-
+-int netcam_read_rtsp_image(netcam_context_ptr netcam)
+-{
+-
++/**
++* netcam_read_rtsp_image
++*
++*    This function reads the packet from the camera.
++*    It is called extensively so only absolutely essential
++*    functions and allocations are performed.
++*
++* Parameters
++*
++*       netcam  The netcam context to read from
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_read_rtsp_image(netcam_context_ptr netcam){
+     struct timeval    curtime;
+     netcam_buff_ptr    buffer;
+     AVPacket           packet;
+     int                size_decoded;
+-    static int        usual_size_decoded;
+ 
+     /* Point to our working buffer. */
+     buffer = netcam->receiving;
+@@ -234,10 +302,9 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+     packet.size = 0;
+ 
+     size_decoded = 0;
+-    usual_size_decoded = 0;
+ 
+     if (gettimeofday(&curtime, NULL) < 0) {
+-        MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
++        MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+     }
+     netcam->rtsp->startreadtime = curtime;
+ 
+@@ -265,21 +332,10 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+ 
+     if (size_decoded == 0) {
+         // something went wrong, end of stream? Interupted?
+-        MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: invalid frame! %d ", size_decoded);
+-        av_free(netcam->rtsp->frame);
+-        avcodec_close(netcam->rtsp->codec_context);
+-        avformat_close_input(&netcam->rtsp->format_context);
++        netcam_rtsp_close_context(netcam);
+         return -1;
+     }
+ 
+-    if (size_decoded != usual_size_decoded) {
+-        if (usual_size_decoded !=0) {
+-            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: unusual frame size of %d!", size_decoded);
+-        }
+-        usual_size_decoded = size_decoded;
+-    }
+-
+-
+     /*
+      * read is complete - set the current 'receiving' buffer atomically
+      * as 'latest', and make the buffer previously in 'latest' become
+@@ -299,23 +355,558 @@ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+ 
+     return 0;
+ }
+-void netcam_shutdown_rtsp(netcam_context_ptr netcam)
+-{
++/**
++* netcam_rtsp_resize_ntc
++*
++*    This function notifies the user of the need to transcode
++*    the netcam image which uses a lot of CPU resources
++*
++* Parameters
++*
++*       netcam  The netcam context to read from
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_rtsp_resize_ntc(netcam_context_ptr netcam){
++
++    if ((netcam->width  != netcam->rtsp->codec_context->width) ||
++        (netcam->height != netcam->rtsp->codec_context->height) ||
++        (netcam_check_pixfmt(netcam) != 0) ){
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: ");
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: ****************************************************************");
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: The network camera is sending pictures in a different");
++        if ((netcam->width  != netcam->rtsp->codec_context->width) ||
++            (netcam->height != netcam->rtsp->codec_context->height)) {
++            if (netcam_check_pixfmt(netcam) != 0) {
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: size than specified in the config and also a ");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: different picture format.  The picture is being");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: transcoded to YUV420P and into the size requested");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: in the config file.  If possible change netcam to");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: be in YUV420P format and the size requested in the");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: config to possibly lower CPU usage.");
++            } else {
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: size than specified in the configuration file.");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: The picture is being transcoded into the size ");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: requested in the configuration.  If possible change");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: netcam or configuration to indicate the same size");
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: to possibly lower CPU usage.");
++            }
++            MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Netcam: %d x %d => Config: %d x %d"
++            ,netcam->rtsp->codec_context->width,netcam->rtsp->codec_context->height
++            ,netcam->width,netcam->height);
++        } else {
++            MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: format than YUV420P.  The image sent is being ");
++            MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: trancoded to YUV420P.  If possible change netcam ");
++            MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: picture format to YUV420P to possibly lower CPU usage.");
++        }
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: ****************************************************************");
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: ");
++    }
++
++    return 0;
++
++}
++/**
++* netcam_rtsp_open_context
++*
++*    This function opens the format context for the camera.
++*
++* Parameters
++*
++*       netcam  The netcam context to read from
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_rtsp_open_context(netcam_context_ptr netcam){
++
++    int  retcd;
++    char errstr[128];
++
++    if (netcam->rtsp->path == NULL) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Null path passed to connect (%s)", netcam->rtsp->path);
++        }
++        return -1;
++    }
++
++    // open the network connection
++    AVDictionary *opts = 0;
++    netcam->rtsp->format_context = avformat_alloc_context();
++    netcam->rtsp->format_context->interrupt_callback.callback = netcam_interrupt_rtsp;
++    netcam->rtsp->format_context->interrupt_callback.opaque = netcam->rtsp;
++
++    if (strncmp(netcam->rtsp->path, "http", 4) == 0 ){
++        netcam->rtsp->format_context->iformat = av_find_input_format("mjpeg");
++    } else {
++        if (netcam->cnt->conf.rtsp_uses_tcp) {
++            av_dict_set(&opts, "rtsp_transport", "tcp", 0);
++            if (netcam->rtsp->status == RTSP_NOTCONNECTED)
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Using tcp transport");
++        } else {
++            av_dict_set(&opts, "rtsp_transport", "udp", 0);
++            av_dict_set(&opts, "max_delay", "500000", 0);  //100000 is the default
++            if (netcam->rtsp->status == RTSP_NOTCONNECTED)
++                MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Using udp transport");
++        }
++    }
++
++    retcd = avformat_open_input(&netcam->rtsp->format_context, netcam->rtsp->path, NULL, &opts);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %s", netcam->rtsp->path,errstr);
++        }
++        av_dict_free(&opts);
++        //The format context gets freed upon any error from open_input.
++        return retcd;
++    }
++    av_dict_free(&opts);
++
++    // fill out stream information
++    retcd = avformat_find_stream_info(netcam->rtsp->format_context, NULL);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to find stream info: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    retcd = netcam_open_codec(&netcam->rtsp->video_stream_index, netcam->rtsp->format_context, AVMEDIA_TYPE_VIDEO);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open codec context: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    netcam->rtsp->codec_context = netcam->rtsp->format_context->streams[netcam->rtsp->video_stream_index]->codec;
++
++    netcam->rtsp->frame = my_frame_alloc();
++    if (netcam->rtsp->frame == NULL) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to allocate frame.  Fatal error.  Check FFmpeg/Libav configuration");
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    /*
++     *  Validate that the previous steps opened the camera
++     */
++    retcd = netcam_read_rtsp_image(netcam);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Failed to read first image");
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    return 0;
++
++}
++/**
++* netcam_rtsp_open_sws
++*
++*    This function opens the rescaling context components.
++*
++* Parameters
++*
++*       netcam  The netcam context to read from
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_rtsp_open_sws(netcam_context_ptr netcam){
++
++    netcam->width  = ((netcam->cnt->conf.width / 8) * 8);
++    netcam->height = ((netcam->cnt->conf.height / 8) * 8);
++
++
++    netcam->rtsp->swsframe_in = my_frame_alloc();
++    if (netcam->rtsp->swsframe_in == NULL) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to allocate frame.  Fatal error.  Check FFmpeg/Libav configuration");
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    netcam->rtsp->swsframe_out = my_frame_alloc();
++    if (netcam->rtsp->swsframe_out == NULL) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to allocate frame.  Fatal error.  Check FFmpeg/Libav configuration");
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    /*
++     *  The scaling context is used to change dimensions to config file and
++     *  also if the format sent by the camera is not YUV420.
++     */
++    netcam->rtsp->swsctx = sws_getContext(
++         netcam->rtsp->codec_context->width
++        ,netcam->rtsp->codec_context->height
++        ,netcam->rtsp->codec_context->pix_fmt
++        ,netcam->width
++        ,netcam->height
++        ,PIX_FMT_YUV420P
++        ,SWS_BICUBIC,NULL,NULL,NULL);
++    if (netcam->rtsp->swsctx == NULL) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to allocate scaling context.  Fatal error.  Check FFmpeg/Libav configuration");
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    netcam->rtsp->swsframe_size = avpicture_get_size(
++            PIX_FMT_YUV420P
++            ,netcam->width
++            ,netcam->height);
++        if (netcam->rtsp->swsframe_size <= 0) {
++            if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error determining size of frame out");
++            }
++            netcam_rtsp_close_context(netcam);
++            return -1;
++        }
++
++    return 0;
++
++}
++/**
++* netcam_rtsp_resize
++*
++*    This function reencodes the image to yuv420p with the desired size
++*
++* Parameters
++*
++*       netcam  The netcam context to read from
++*       image   The destination image.
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_rtsp_resize(unsigned char *image , netcam_context_ptr netcam){
++
++    int      retcd;
++    char     errstr[128];
++    uint8_t *buffer_out;
++
++    retcd = avpicture_fill(
++        (AVPicture*)netcam->rtsp->swsframe_in
++        ,(uint8_t*)netcam->latest->ptr
++        ,netcam->rtsp->codec_context->pix_fmt
++        ,netcam->rtsp->codec_context->width
++        ,netcam->rtsp->codec_context->height);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error allocating picture in: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++
++    buffer_out=(uint8_t *)av_malloc(netcam->rtsp->swsframe_size*sizeof(uint8_t));
++
++    retcd = avpicture_fill(
++        (AVPicture*)netcam->rtsp->swsframe_out
++        ,buffer_out
++        ,PIX_FMT_YUV420P
++        ,netcam->width
++        ,netcam->height);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error allocating picture out: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    retcd = sws_scale(
++        netcam->rtsp->swsctx
++        ,(const uint8_t* const *)netcam->rtsp->swsframe_in->data
++        ,netcam->rtsp->swsframe_in->linesize
++        ,0
++        ,netcam->rtsp->codec_context->height
++        ,netcam->rtsp->swsframe_out->data
++        ,netcam->rtsp->swsframe_out->linesize);
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error resizing/reformatting: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    retcd = avpicture_layout(
++        (const AVPicture*)netcam->rtsp->swsframe_out
++        ,PIX_FMT_YUV420P
++        ,netcam->width
++        ,netcam->height
++        ,(unsigned char *)image
++        ,netcam->rtsp->swsframe_size );
++    if (retcd < 0) {
++        if (netcam->rtsp->status == RTSP_NOTCONNECTED){
++            av_strerror(retcd, errstr, sizeof(errstr));
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error putting frame into output buffer: %s", errstr);
++        }
++        netcam_rtsp_close_context(netcam);
++        return -1;
++    }
++
++    av_free(buffer_out);
++
++    return 0;
++
++}
++/*********************************************************
++ *  This ends the section of functions that rely upon FFmpeg
++ ***********************************************************/
++#endif /* End HAVE_FFMPEG */
++
++/**
++* netcam_connect_rtsp
++*
++*    This function initiates the connection to the rtsp camera.
++*
++* Parameters
++*
++*       netcam  The netcam context to open.
++*
++* Returns:
++*       Failure    -1
++*       Success     0(zero)
++*
++*/
++int netcam_connect_rtsp(netcam_context_ptr netcam){
++#ifdef HAVE_FFMPEG
++
++    if (netcam_rtsp_open_context(netcam) < 0) return -1;
++
++    if (netcam_rtsp_open_sws(netcam) < 0) return -1;
++
++    if (netcam_rtsp_resize_ntc(netcam) < 0 ) return -1;
++
++    if (netcam_read_rtsp_image(netcam) < 0) return -1;
++
++    netcam->rtsp->status = RTSP_CONNECTED;
++
++    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Camera connected");
++
++    return 0;
++
++#else  /* No FFmpeg/Libav */
++    netcam->rtsp->status = RTSP_NOTCONNECTED;
++    netcam->rtsp->format_context = NULL;
++    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: FFmpeg/Libav not found on computer.  No RTSP support");
++    return -1;
++#endif /* End #ifdef HAVE_FFMPEG */
++}
+ 
+-    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO,"%s: shutting down rtsp");
++/**
++* netcam_shutdown_rtsp
++*
++*    This function closes and frees all the items for rtsp
++*
++* Parameters
++*
++*       netcam  The netcam context to free.
++*
++* Returns:
++*       Failure    nothing
++*       Success    nothing
++*
++*/
++void netcam_shutdown_rtsp(netcam_context_ptr netcam){
++#ifdef HAVE_FFMPEG
+ 
+-    my_frame_free(netcam->rtsp->frame);
+-    avcodec_close(netcam->rtsp->codec_context);
+-    avformat_close_input(&netcam->rtsp->format_context);
++    if (netcam->rtsp->status == RTSP_CONNECTED) {
++        netcam_rtsp_close_context(netcam);
++        MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO,"%s: netcam shut down");
++    }
+ 
+     if (netcam->rtsp->path != NULL) free(netcam->rtsp->path);
+     if (netcam->rtsp->user != NULL) free(netcam->rtsp->user);
+     if (netcam->rtsp->pass != NULL) free(netcam->rtsp->pass);
+ 
+     free(netcam->rtsp);
+-
+     netcam->rtsp = NULL;
+-    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO,"%s: rtsp shut down");
++
++#else  /* No FFmpeg/Libav */
++        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: FFmpeg/Libav not found on computer.  No RTSP support");
++#endif /* End #ifdef HAVE_FFMPEG */
++}
++
++/**
++* netcam_setup_rtsp
++*
++*    This function sets up all the necessary items for the
++*    rtsp camera.
++*
++* Parameters
++*
++*       netcam  The netcam context to free.
++*       url     The URL of the camera
++*
++* Returns:
++*       Failure    -1
++*       Success    0(zero)
++*
++*/
++int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url){
++#ifdef HAVE_FFMPEG
++
++  struct context *cnt = netcam->cnt;
++  const char *ptr;
++  int ret = -1;
++
++  netcam->caps.streaming = NCS_RTSP;
++
++  netcam->rtsp = rtsp_new_context();
++
++  netcam_rtsp_null_context(netcam);
++
++  if (netcam->rtsp == NULL) {
++    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to create rtsp context");
++    netcam_shutdown_rtsp(netcam);
++    return -1;
++  }
++
++  /*
++   * Allocate space for a working string to contain the path.
++   * The extra 5 is for "://", ":" and string terminator.
++   */
++
++  // force port to a sane value
++  if (netcam->connect_port > 65536) {
++    netcam->connect_port = 65536;
++  } else if (netcam->connect_port < 0) {
++    netcam->connect_port = 0;
++  }
++
++    if (cnt->conf.netcam_userpass != NULL) {
++        ptr = cnt->conf.netcam_userpass;
++    } else {
++        ptr = url->userpass;  /* Don't set this one NULL, gets freed. */
++    }
++
++    if (ptr != NULL) {
++        char *cptr;
++        if ((cptr = strchr(ptr, ':')) == NULL) {
++            netcam->rtsp->user = mystrdup(ptr);
++        } else {
++            netcam->rtsp->user = mymalloc((cptr - ptr)+2);  //+2 for string terminator
++            memcpy(netcam->rtsp->user, ptr,(cptr - ptr));
++            netcam->rtsp->pass = mystrdup(cptr + 1);
++        }
++    }
++
++    /*
++     *  Need a method to query the path and
++     *  determine the authentication type
++     */
++    if ((netcam->rtsp->user != NULL) && (netcam->rtsp->pass != NULL)) {
++        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
++	          + 5 + strlen(url->path) + 5
++              + strlen(netcam->rtsp->user) + strlen(netcam->rtsp->pass) + 4 );
++        sprintf((char *)ptr, "%s://%s:%s@%s:%d%s",
++                url->service,netcam->rtsp->user,netcam->rtsp->pass,
++                netcam->connect_host, netcam->connect_port, url->path);
++    }
++    else {
++        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
++	          + 5 + strlen(url->path) + 5);
++        sprintf((char *)ptr, "%s://%s:%d%s", url->service,
++	        netcam->connect_host, netcam->connect_port, url->path);
++    }
++    netcam->rtsp->path = (char *)ptr;
++
++    netcam_url_free(url);
++
++    /*
++     * Now we need to set some flags
++     */
++    netcam->rtsp->readingframe = 0;
++    netcam->rtsp->status = RTSP_NOTCONNECTED;
++
++    av_register_all();
++    avformat_network_init();
++    avcodec_register_all();
++
++    /*
++     * The RTSP context should be all ready to attempt a connection with
++     * the server, so we try ....
++     */
++    ret = netcam_connect_rtsp(netcam);
++    if (ret < 0){
++        return ret;
++    }
++
++    netcam->get_image = netcam_read_rtsp_image;
++
++  return 0;
++
++#else  /* No FFmpeg/Libav */
++    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: FFmpeg/Libav not found on computer.  No RTSP support");
++    return -1;
++#endif /* End #ifdef HAVE_FFMPEG */
+ }
+ 
+-#endif
++/**
++* netcam_next_rtsp
++*
++*    This function moves the picture to the image buffer.
++*    If the picture is not in the correct format for size
++*    it will put it into the requested format
++*
++* Parameters
++*
++*       netcam  The netcam context to free.
++*       url     The URL of the camera
++*
++* Returns:
++*       Failure    -1
++*       Success    0(zero)
++*
++*/
++int netcam_next_rtsp(unsigned char *image , netcam_context_ptr netcam){
++#ifdef HAVE_FFMPEG
++
++    if ((netcam->width  != netcam->rtsp->codec_context->width) ||
++        (netcam->height != netcam->rtsp->codec_context->height) ||
++        (netcam_check_pixfmt(netcam) != 0) ){
++        netcam_rtsp_resize(image ,netcam);
++    } else {
++        memcpy(image, netcam->latest->ptr, netcam->latest->used);
++    }
++    if (netcam->cnt->rotate_data.degrees > 0)
++        /* Rotate as specified */
++        rotate_map(netcam->cnt, image);
++
++    return 0;
++#else  /* No FFmpeg/Libav */
++    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: FFmpeg/Libav not found on computer.  No RTSP support");
++    return -1;
++#endif /* End #ifdef HAVE_FFMPEG */
++}
+diff --git a/netcam_rtsp.h b/netcam_rtsp.h
+index a1770ed..a09d295 100644
+--- a/netcam_rtsp.h
++++ b/netcam_rtsp.h
+@@ -1,25 +1,43 @@
+ #include "netcam.h"
++
++#ifdef HAVE_FFMPEG
++
+ #include <libavcodec/avcodec.h>
+ #include <libavformat/avformat.h>
+ #include <libavformat/avio.h>
+ #include <libavutil/avutil.h>
+ #include <libavutil/imgutils.h>
++#include <libswscale/swscale.h>
+ 
++#endif /* end HAVE_FFMPEG  */
+ 
+ struct rtsp_context {
++#ifdef HAVE_FFMPEG
+     AVFormatContext*      format_context;
+     AVCodecContext*       codec_context;
+-    AVFrame               *frame;
++    AVFrame*              frame;
++    AVFrame*              swsframe_in;
++    AVFrame*              swsframe_out;
++    int                   swsframe_size;
+     int                   video_stream_index;
+     char*                 path;
+     char*                 user;
+     char*                 pass;
+     int                   readingframe;
+-    int                   connected;
++    int                   status;
+     struct timeval        startreadtime;
++    struct SwsContext*   swsctx;
++
++#else /* Do not have FFmpeg */
++    int*                  format_context;
++    int                   readingframe;
++    int                   status;
++#endif /* end HAVE_FFMPEG  */
+ };
+ 
+ struct rtsp_context *rtsp_new_context(void);
+ void netcam_shutdown_rtsp(netcam_context_ptr netcam);
+-int rtsp_connect(netcam_context_ptr netcam);
++int netcam_connect_rtsp(netcam_context_ptr netcam);
+ int netcam_read_rtsp_image(netcam_context_ptr netcam);
++int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url);
++int netcam_next_rtsp(unsigned char *image , netcam_context_ptr netcam);
+-- 
+1.8.1.4
+

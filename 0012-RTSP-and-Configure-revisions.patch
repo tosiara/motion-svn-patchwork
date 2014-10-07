@@ -1,0 +1,4865 @@
+From c8bf4d69063ca68d6e6fdc4b2c5e5cb2981fcc06 Mon Sep 17 00:00:00 2001
+From: Dave <zz4077@comcast.net>
+Date: Fri, 13 Jun 2014 22:46:41 -0600
+Subject: [PATCH 12/26] RTSP and Configure revisions
+
+---
+ CHANGELOG     |    4 +
+ INSTALL       |   38 +-
+ configure     |  209 +++++----
+ configure.ac  | 1393 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ configure.in  | 1364 -------------------------------------------------------
+ netcam.c      |  454 ++++++++++---------
+ netcam_rtsp.c |  379 ++++++++--------
+ netcam_rtsp.h |   15 +-
+ 8 files changed, 1990 insertions(+), 1866 deletions(-)
+ create mode 100644 configure.ac
+ delete mode 100644 configure.in
+
+diff --git a/CHANGELOG b/CHANGELOG
+index 57671c2..e4c6cb4 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -55,6 +55,10 @@ Features
+        picture.c,webhttpd.c,stream.c,ffmpeg.c
+    * Bug fix as part of warnings in webhttpd.c fixed(Mr-Dave)
+    * Removed compiler warning regarding ffmpeg being newer than 0.4 version(Mr-Dave)
++   * New configure script and identification of ffmpeg version and additional libs. (Mr-Dave)
++   * Resolve additional compiler warnings in ffmpeg (Mr-Dave)
++   * Revised INSTALL with samples(Mr-Dave)
++   * Revisions for RTSP and code standard.(Mr-Dave)
+    
+ Bugfixes
+    * Avoid segfault detecting strerror_r() version GNU or SUSv3. (Angel Carpintero)
+diff --git a/INSTALL b/INSTALL
+index 5063740..8f49abd 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -1,16 +1,36 @@
+-Very simple:
++Required Packages:
++    sudo apt-get install autoconf automake build-essential libjpeg-turbo8-dev libzip-dev
+ 
+-type:
++Obtain source code (via git)
++    sudo apt-get install git
++    cd ~
++    git clone {https://github.com/your favorite fork}
+ 
+-    ./configure
++To rebuild the motion configure file use
++    autoreconf
+ 
+-followed by:
++Optional: With FFMPEG support:
++    Build FFMPEG via their instructions
+ 
+-    make
++    Change to location of the motion source code
++    cd ~/motion
+ 
+-And
++    Configure with manually built ffmpeg which installs to ~/bin and ~/ffmpeg_build
++        Basic
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include
+ 
+-    make install
++        With extra libraries for ffmpeg  IMPORTANT NOTE:  Your libraries will vary depending upon your build of FFMPEG
++            ./configure --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++        With extra libraries for ffmpeg and install to ~/motion_build
++            ./configure --prefix=$HOME/motion_build --with-ffmpeg=$HOME/ffmpeg_build --with-ffmpeg-headers=$HOME/ffmpeg_build/include --with-ffmpeg-libs=" -lavformat -lswscale -lavcodec -lavutil -lfdk-aac -lswresample -lm -lopus -lz -lva -lvpx -lx264 -lmp3lame -lbz2 -ldl -lvorbisenc -lvorbis -ltheoraenc -ltheoradec "
++
++With APT versions of ffmpeg libraries
++    sudo apt-get install libavformat-dev libavcodec-dev
+ 
+-    
+-Next read the README
++Without any FFMPEG support or just any installed version of FFMPEG
++    ./configure
++
++Once configured type:
++    make
++    make install
+diff --git a/configure b/configure
+index b9b0a24..a997f79 100755
+--- a/configure
++++ b/configure
+@@ -666,6 +666,7 @@ with_jpeg_turbo
+ with_jpeg_mmx
+ with_ffmpeg
+ with_ffmpeg_headers
++with_ffmpeg_libs
+ with_sqlite3
+ with_mysql
+ with_mysql_lib
+@@ -1326,6 +1327,8 @@ Optional Packages:
+ 
+   --with-ffmpeg-headers=DIR Specify the prefix for ffmpeg headers.
+ 
++  --with-ffmpeg-libs=libs  Specify the extra libs for ffmpeg
++
+   --without-sqlite3       Disable sqlite3 support in motion.
+ 
+   --without-mysql         Disable mysql support in motion.
+@@ -1534,43 +1537,6 @@ fi
+ 
+ } # ac_fn_c_try_link
+ 
+-# ac_fn_c_try_cpp LINENO
+-# ----------------------
+-# Try to preprocess conftest.$ac_ext, and return whether this succeeded.
+-ac_fn_c_try_cpp ()
+-{
+-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+-  if { { ac_try="$ac_cpp conftest.$ac_ext"
+-case "(($ac_try" in
+-  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+-  *) ac_try_echo=$ac_try;;
+-esac
+-eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+-$as_echo "$ac_try_echo"; } >&5
+-  (eval "$ac_cpp conftest.$ac_ext") 2>conftest.err
+-  ac_status=$?
+-  if test -s conftest.err; then
+-    grep -v '^ *+' conftest.err >conftest.er1
+-    cat conftest.er1 >&5
+-    mv -f conftest.er1 conftest.err
+-  fi
+-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+-  test $ac_status = 0; } > conftest.i && {
+-	 test -z "$ac_c_preproc_warn_flag$ac_c_werror_flag" ||
+-	 test ! -s conftest.err
+-       }; then :
+-  ac_retval=0
+-else
+-  $as_echo "$as_me: failed program was:" >&5
+-sed 's/^/| /' conftest.$ac_ext >&5
+-
+-    ac_retval=1
+-fi
+-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+-  as_fn_set_status $ac_retval
+-
+-} # ac_fn_c_try_cpp
+-
+ # ac_fn_c_try_run LINENO
+ # ----------------------
+ # Try to link conftest.$ac_ext, and return whether this succeeded. Assumes
+@@ -1613,6 +1579,43 @@ fi
+ 
+ } # ac_fn_c_try_run
+ 
++# ac_fn_c_try_cpp LINENO
++# ----------------------
++# Try to preprocess conftest.$ac_ext, and return whether this succeeded.
++ac_fn_c_try_cpp ()
++{
++  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
++  if { { ac_try="$ac_cpp conftest.$ac_ext"
++case "(($ac_try" in
++  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
++  *) ac_try_echo=$ac_try;;
++esac
++eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
++$as_echo "$ac_try_echo"; } >&5
++  (eval "$ac_cpp conftest.$ac_ext") 2>conftest.err
++  ac_status=$?
++  if test -s conftest.err; then
++    grep -v '^ *+' conftest.err >conftest.er1
++    cat conftest.er1 >&5
++    mv -f conftest.er1 conftest.err
++  fi
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; } > conftest.i && {
++	 test -z "$ac_c_preproc_warn_flag$ac_c_werror_flag" ||
++	 test ! -s conftest.err
++       }; then :
++  ac_retval=0
++else
++  $as_echo "$as_me: failed program was:" >&5
++sed 's/^/| /' conftest.$ac_ext >&5
++
++    ac_retval=1
++fi
++  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
++  as_fn_set_status $ac_retval
++
++} # ac_fn_c_try_cpp
++
+ # ac_fn_c_check_header_mongrel LINENO HEADER VAR INCLUDES
+ # -------------------------------------------------------
+ # Tests whether HEADER exists, giving a warning if it cannot be compiled using
+@@ -4280,6 +4283,18 @@ fi
+ 
+ 
+ #
++# ffmpeg custom extra libraries
++#
++FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz "
++
++# Check whether --with-ffmpeg-libs was given.
++if test "${with_ffmpeg_libs+set}" = set; then :
++  withval=$with_ffmpeg_libs; FFMPEG_EXTRALIBS="$withval"
++
++fi
++
++
++#
+ # --without-ffmpeg or with-ffmpeg=no
+ #
+ if test "${FFMPEG_DIR}" = "no"; then
+@@ -4364,51 +4379,63 @@ $as_echo "not found" >&6; }
+ 	fi
+ fi
+ 
++
+ #
+ # Now check for ffmpeg headers ( avformat.h ) if ffmpeg libs were found
+ #
+ 
++AVFORMAT_DIR=""
++
+ if test "${FFMPEG_OK}" = "found"; then
+     if test "${FFMPEG_HEADERS_DIR}" = "yes"; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ffmpeg headers in ${FFMPEG_DIR}" >&5
+ $as_echo_n "checking for ffmpeg headers in ${FFMPEG_DIR}... " >&6; }
+-	else
++        AVFORMAT_DIR="${FFMPEG_DIR}"
++    else
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ffmpeg headers in ${FFMPEG_HEADERS_DIR}" >&5
+ $as_echo_n "checking for ffmpeg headers in ${FFMPEG_HEADERS_DIR}... " >&6; }
+         FFMPEG_DIR="${FFMPEG_HEADERS_DIR}"
++        AVFORMAT_DIR="${FFMPEG_DIR}"
+     fi
+ 
+     if test -f ${FFMPEG_DIR}/include/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/include/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/avformat.h"
+     elif test -f ${FFMPEG_DIR}/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}"
++        AVFORMAT_DIR="${FFMPEG_DIR}/avformat.h"
+     elif test -f ${FFMPEG_DIR}/include/ffmpeg/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/ffmpeg/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/include/ffmpeg/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/avformat.h"
+     elif test -f ${FFMPEG_DIR}/include/libavformat/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/libavformat/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/include/libavformat/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
+         AVFORMAT="-I${FFMPEG_DIR}/include/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/libavformat/avformat.h"
+     elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
+         AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h"
+     elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: found ${FFMPEG_DIR}/libavformat/avformat.h" >&5
+ $as_echo "found ${FFMPEG_DIR}/libavformat/avformat.h" >&6; }
+         FFMPEG_CFLAGS="-I${FFMPEG_DIR} -DFFMPEG_NEW_INCLUDES"
+         AVFORMAT="-I{FFMPEG_DIR}/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/libavformat/avformat.h"
+     else
+         { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+ $as_echo "not found" >&6; }
+         FFMPEG_OK="no_found"
++        AVFORMAT_DIR="avformat.h"
+         echo "**********************************************"
+         echo "*       avformat.h not found:                *"
+         echo "*    ALL FFMPEG FEATURES DISABLED            *"
+@@ -4423,15 +4450,49 @@ $as_echo "not found" >&6; }
+ # If ffmpeg libs and headers have been found
+ #
+ 
+-	if  test "${FFMPEG_OK}" = "found"; then
+-        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} -lavformat -lavcodec -lavutil -lm -lz"
++    if  test "${FFMPEG_OK}" = "found"; then
++        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} ${FFMPEG_EXTRALIBS}"
+         TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
+         TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
+ 
+         FFMPEG_OBJ="ffmpeg.o"
+ 
+ 
+-        RTPS_OBJ="netcam_rtsp.o"
++        { $as_echo "$as_me:${as_lineno-$LINENO}: checking avformat" >&5
++$as_echo_n "checking avformat... " >&6; }
++        if test "$cross_compiling" = yes; then :
++  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
++$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
++as_fn_error $? "cannot run test program while cross compiling
++See \`config.log' for more details" "$LINENO" 5; }
++else
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++
++             #include <${AVFORMAT_DIR}>
++             int main(void){
++                 if (LIBAVFORMAT_VERSION_MAJOR >= 55) return -1;
++                 return 0;
++             }
++
++_ACEOF
++if ac_fn_c_try_run "$LINENO"; then :
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: version previous to 55" >&5
++$as_echo "version previous to 55" >&6; }
++else
++
++             { $as_echo "$as_me:${as_lineno-$LINENO}: result: version 55 or higher" >&5
++$as_echo "version 55 or higher" >&6; }
++             TEMP_CFLAGS="${TEMP_CFLAGS} -DFFMPEG_V55"
++             RTPS_OBJ="netcam_rtsp.o"
++
++
++
++fi
++rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
++  conftest.$ac_objext conftest.beam conftest.$ac_ext
++fi
+ 
+ 
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking file_protocol is defined in ffmpeg ?" >&5
+@@ -4439,20 +4500,19 @@ $as_echo_n "checking file_protocol is defined in ffmpeg ?... " >&6; }
+         saved_CFLAGS=$CFLAGS
+         saved_LIBS=$LIBS
+ 
++        CFLAGS="${FFMPEG_CFLAGS} ${AVFORMAT}"
++        LIBS="$TEMP_LIBS"
+ 
+-		CFLAGS="${FFMPEG_CFLAGS} ${AVFORMAT}"
+-		LIBS="$TEMP_LIBS"
+-
+-	    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+ 
+-		     #include <avformat.h>
+-		     URLProtocol test_file_protocol;
+-		     int main(void){
+-		         test_file_protocol.url_read  = file_protocol.url_read;
+-		         return 0;
+-		     }
++             #include <${AVFORMAT_DIR}>
++             URLProtocol test_file_protocol;
++             int main(void){
++                 test_file_protocol.url_read  = file_protocol.url_read;
++                 return 0;
++             }
+ 
+ _ACEOF
+ if ac_fn_c_try_compile "$LINENO"; then :
+@@ -4460,16 +4520,16 @@ if ac_fn_c_try_compile "$LINENO"; then :
+ $as_echo "yes" >&6; }
+ else
+ 
+-			     { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++             { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+ $as_echo "no" >&6; }
+-			     TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG_NEW"
++             TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG_NEW"
+ 
+ 
+ fi
+ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+-		CFLAGS=$saved_CFLAGS
+-		LIBS=$saved_LIBS
+-	fi
++        CFLAGS=$saved_CFLAGS
++        LIBS=$saved_LIBS
++    fi
+ fi
+ fi
+ 
+@@ -6017,43 +6077,6 @@ LIBS="${TEMP_LIBS}"
+ LDFLAGS="${TEMP_LDFLAGS}"
+ 
+ 
+-ac_fn_c_check_func "$LINENO" "avformat_alloc_context" "ac_cv_func_avformat_alloc_context"
+-if test "x$ac_cv_func_avformat_alloc_context" = xyes; then :
+-
+-$as_echo "#define have_avformat_alloc_context 1" >>confdefs.h
+-
+-fi
+-
+-ac_fn_c_check_func "$LINENO" "av_avformat_alloc_context" "ac_cv_func_av_avformat_alloc_context"
+-if test "x$ac_cv_func_av_avformat_alloc_context" = xyes; then :
+-
+-$as_echo "#define have_av_avformat_alloc_context 1" >>confdefs.h
+-
+-fi
+-
+-ac_fn_c_check_func "$LINENO" "av_register_protocol2" "ac_cv_func_av_register_protocol2"
+-if test "x$ac_cv_func_av_register_protocol2" = xyes; then :
+-
+-$as_echo "#define have_av_register_protocol2 1" >>confdefs.h
+-
+-fi
+-
+-ac_fn_c_check_func "$LINENO" "av_register_protocol" "ac_cv_func_av_register_protocol"
+-if test "x$ac_cv_func_av_register_protocol" = xyes; then :
+-
+-$as_echo "#define have_av_register_protocol 1" >>confdefs.h
+-
+-fi
+-
+-ac_fn_c_check_func "$LINENO" "av_get_media_type_string" "ac_cv_func_av_get_media_type_string"
+-if test "x$ac_cv_func_av_get_media_type_string" = xyes; then :
+-
+-$as_echo "#define have_av_get_media_type_string 1" >>confdefs.h
+-
+-fi
+-
+-
+-
+ #
+ # Add the right exec path for rc scripts
+ #
+diff --git a/configure.ac b/configure.ac
+new file mode 100644
+index 0000000..ad54e6b
+--- /dev/null
++++ b/configure.ac
+@@ -0,0 +1,1393 @@
++# Process this file with autoconf to produce a configure script
++
++AC_INIT(motion, esyscmd(['./version.sh']))
++AC_CONFIG_SRCDIR([motion.c])
++AC_CONFIG_HEADERS(config.h)
++AC_PROG_CC
++
++
++THREAD_CFLAGS=""
++THREAD_CHECK="/usr/include/pthread.h"
++
++Darwin=""
++FreeBSD=""
++
++LINUXTHREADS="no"
++AC_ARG_WITH(linuxthreads,
++[  --with-linuxthreads     Use linuxthreads in BSD instead of native pthreads
++				]
++				,
++LINUXTHREADS="$withval"
++)
++
++PWCBSD="no"
++AC_ARG_WITH(pwcbsd,
++[  --with-pwcbsd           Use pwcbsd based webcams ( only BSD )
++]
++,
++PWCBSD="$withval"
++)
++
++
++AC_MSG_CHECKING(for Darwin)
++Darwin=`uname -a | grep "Darwin"`
++
++if test "${Darwin}" = ""; then
++	AC_MSG_RESULT(no)
++	AC_MSG_CHECKING(for *BSD)
++
++	FreeBSD=`uname -a | grep "BSD"`
++	if test "${FreeBSD}" = ""; then
++		AC_MSG_RESULT(no)
++		VIDEO="video.o video2.o video_common.o"
++	else
++		AC_MSG_RESULT(yes)
++		if test "${LINUXTHREADS}" = "no"; then
++			AC_MSG_CHECKING(Linuxthreads)
++			AC_MSG_RESULT(skipping)
++		else	
++			THREAD_CHECK="/usr/local/include/pthread/linuxthreads/pthread.h"
++			THREAD_LIB_CHECK="/usr/local/lib/liblthread.so"
++		fi
++
++		if test "${PWCBSD}" != "no"; then
++			VIDEO="video.o video2.o video_common.o"
++			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include -DPWCBSD"
++		else 
++			VIDEO="video_freebsd.o"
++			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include"	
++		fi
++
++		TEMP_LDFLAGS="${LDFLAGS} -L/usr/local/lib"
++		TEMP_LIBS="-L/usr/local/lib"
++		AC_MSG_RESULT(Build with PWCBSD support $PWCBSD)
++
++	fi
++else
++	TEMP_CFLAGS="${CFLAGS} -I/sw/include"
++	TEMP_LDFLAGS="${LDFLAGS} -L/sw/lib"
++	TEMP_LIBS="-L/sw/lib"
++	VIDEO="video_freebsd.o"
++	FINK_LIB="-L/sw/lib"
++	Darwin="yes"
++	V4L="no"
++	AC_MSG_RESULT($Darwin)
++fi
++
++
++AC_SUBST(VIDEO)
++
++# Checks for programs.
++AC_PROG_CC
++
++TEMP_LIBS="-lm ${TEMP_LIBS}"
++TEMP_CFLAGS="${TEMP_CFLAGS} ${CFLAGS}"
++TEMP_LDFLAGS="${TEMP_LDFLAGS} ${LDFLAGS}"
++
++if test "${FreeBSD}" != "" && test "${PWCBSD}" = "no"; then
++
++	AC_MSG_CHECKING(bktr headers in /usr/include/dev/bktr)
++
++	if test -f /usr/include/dev/bktr/ioctl_meteor.h && test -f /usr/include/dev/bktr/ioctl_bt848.h; then
++		AC_MSG_RESULT(yes)
++	else
++		AC_MSG_RESULT(no)
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DOLD_BKTR"
++	fi
++#
++# Check to Exclude BKTR 
++#
++BKTR="yes"
++AC_ARG_WITH(bktr,
++[  --without-bktr          Exclude to use bktr subsystem , that usually useful
++                          for devices as network cameras ( ONLY used in *BSD).
++                          ]
++                          ,
++BKTR="$withval"
++)
++
++	if test "${BKTR}" = "no"; then
++        	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
++	fi
++
++else
++
++#
++# Check to Exclude V4L
++#
++V4L="yes"
++AC_ARG_WITH(v4l,
++[  --without-v4l           Exclude using v4l (video4linux) subsystem.
++                          Makes Motion so it only supports network cameras.
++                          ],
++V4L="$withval"
++)
++
++fi
++
++
++if test "${V4L}" = "no"; then
++	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
++fi
++
++
++if test "${FreeBSD}" != "" && test "${LINUXTHREADS}" != "no" ; then
++
++AC_MSG_CHECKING(for linuxthreads)
++
++#
++# Check for thread header
++#
++	if test -f "${THREAD_CHECK}"; then
++       	HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
++       	THREADS="yes"
++	else
++       	THREADS="no"
++	fi
++
++#
++# Check for thread lib
++#
++	if test -f "${THREAD_LIB_CHECK}" ; then
++		THREADS="yes"
++		LIB_THREAD="-llthread -llgcc_r"
++	else
++       	THREADS="no"
++	fi
++
++# Checks for Library linuxthreads for FreeBSD
++#
++# linuxthreads on freeBSD, ports collection
++# /usr/local/include/pthreads/linuxthreads/pthread.h
++# #include <linuxthreads/pthread.h>
++# /usr/local/lib/libpthread.so
++#
++
++	if test "${THREADS}" = "yes"; then
++		TEMP_CFLAGS="${HEADERS_THREAD_CFLAGS} $TEMP_CFLAGS -DWITH_LINUXTREADS"
++        TEMP_LIBS="$TEMP_LIBS ${LIB_THREAD}"
++        THREAD_CFLAGS="-D_THREAD_SAFE"
++        PTHREAD_SUPPORT="yes"
++        AC_MSG_RESULT($THREADS)
++    else
++        PTHREAD_SUPPORT="no"
++        AC_MSG_RESULT($THREADS)
++        echo
++        echo "You do not have linuxthread installed"
++        echo
++    fi
++
++elif test -f "${THREAD_CHECK}"; then
++
++
++AC_MSG_CHECKING(threads)
++AC_TRY_LINK([#include <pthread.h>],
++[pthread_t th; pthread_join(th, 0);
++ pthread_attr_init(0); pthread_cleanup_push(0, 0);
++ pthread_create(0,0,0,0); pthread_cleanup_pop(0); ],
++ [PTHREAD_LIB=yes])
++
++if test x$PTHREAD_LIB != xyes; then
++
++	if test "${FreeBSD}" != ""; then
++		TEMP_LIBS="$TEMP_LIBS -pthread"
++		TEMP_CFLAGS="${TEMP_CFLAGS} -D_REENTRANT -D_THREAD_SAFE"
++	else
++		TEMP_LIBS="$TEMP_LIBS -lpthread"
++		TEMP_CFLAGS="${TEMP_CFLAGS} -D_REENTRANT"
++	fi
++	PTHREAD_SUPPORT="yes"
++fi
++	AC_MSG_RESULT($PTHREAD_SUPPORT)                        
++
++else
++	echo 
++	echo "You do not have threads support"
++	echo	
++fi
++
++
++#
++# Check for sdl library
++#
++SDL_SUPPORT="no"
++AC_ARG_WITH(sdl,
++[  --without-sdl           Compile without sdl support to get stream in SDL window.
++],
++[],
++[])
++AC_MSG_CHECKING(for sdl)
++if test "x$withval" = "xno"; then
++	AC_MSG_RESULT(skipped)
++else
++	if test "${FreeBSD}" != ""; then
++		CONFIG_SDL='sdl11-config'
++	else
++		CONFIG_SDL='sdl-config'
++	fi
++	if test -z "`($CONFIG_SDL --version) 2>/dev/null`" ;then
++		AC_MSG_RESULT(no)
++		if test "$withval" = "yes"; then
++			echo ""
++			echo "****************************************************"
++			echo "* sdl-config could not be found. Please install it *"
++			echo "* and remove the --with-sdl configure argument.    *"
++			echo "* libSDL can be found at http://www.libsdl.org     *"
++			echo "****************************************************"
++			echo ""
++		fi
++	else
++		AC_MSG_RESULT(yes)
++		SDL_SUPPORT="yes"
++		TEMP_LIBS="$TEMP_LIBS `${CONFIG_SDL} --libs`"
++		TEMP_CFLAGS="${TEMP_CFLAGS} `${CONFIG_SDL} --cflags`"
++		AC_DEFINE([HAVE_SDL],1,[Define to 1 if you have SDL support])
++		SDL_OBJ="sdl.o"
++		AC_SUBST(SDL_OBJ)
++	fi
++fi
++
++#
++# Check for the libjpeg-turbo library
++#
++JPEG_TURBO="no"
++JPEG_TURBO_OK="not_found"
++
++AC_ARG_WITH(jpeg-turbo,
++[  --with-jpeg-turbo[=DIR]   Specify the prefix for the install path for
++                          jpeg-turbo for optimized jpeg handling (optional).
++                          ],
++JPEG_TURBO="$withval"
++)
++
++if test "${JPEG_TURBO}" = "no"; then
++    AC_MSG_CHECKING(for libjpeg-turbo)
++    AC_MSG_RESULT(skipping)
++else
++    AC_MSG_CHECKING(for libjpeg-turbo in -> [${JPEG_TURBO}] <-)
++    if test -f ${JPEG_TURBO}/lib/libjpeg.a ; then
++        AC_MSG_RESULT(found)
++        JPEG_TURBO_OK="found"
++    else
++        AC_MSG_RESULT(not found)
++    fi
++fi
++
++
++if test "${JPEG_TURBO_OK}" = "found"; then
++    saved_CFLAGS="$CFLAGS"
++    saved_LIBS="$LIBS"
++    saved_LDFLAGS="$LDFLAGS"
++    LDFLAGS="-L${JPEG_TURBO}/lib"
++    CFLAGS="$CFLAGS -I${JPEG_TURBO}/include"
++    LIBS="$LIBS -L${JPEG_TURBO}/lib -ljpeg"
++    AC_CHECK_LIB(jpeg, jpeg_start_compress,
++        [ TEMP_LIBS="$LIBS"
++          TEMP_CFLAGS="${CFLAGS}"
++          TEMP_LDFLAGS="$TEMP_LDFLAGS $LDFLAGS"
++          JPEG_SUPPORT="yes"],,)
++    LIBS="$saved_LIBS"
++    CFLAGS="$saved_CFLAGS"
++    LDFLAGS="$saved_LDFLAGS"
++    JPEG_SUPPORT_TURBO="yes"
++fi
++
++
++#
++# Check for the special mmx accelerated jpeg library
++#
++JPEG_MMX="no"
++JPEG_MMX_OK="not_found"
++AC_ARG_WITH(jpeg-mmx,
++[  --with-jpeg-mmx[=DIR]     Specify the prefix for the install path for
++                          jpeg-mmx for optimized jpeg handling (optional).
++                          If this is not specified motion will try to find
++                          the library /usr/lib/libjpeg-mmx.a /usr/local/lib/libjpeg-mmx.a.
++                          ],
++JPEG_MMX="$withval"
++)
++
++#
++# --without-jpeg-mmx or with-jpeg-mmx=no
++#
++
++if test "${JPEG_MMX}" = "no" || test x$JPEG_SUPPORT != xyes; then
++        AC_MSG_CHECKING(for libjpeg-mmx)
++        AC_MSG_RESULT(skipping)
++elif test "${JPEG_MMX}" = "yes"; then
++	# AUTODETECT STATIC LIB
++	AC_MSG_CHECKING(for libjpeg-mmx autodetecting)
++	
++	if test -f /usr/lib/libjpeg-mmx.a ; then
++		AC_MSG_RESULT(found)
++		JPEG_MMX_OK="found"
++		JPEG_MMX="/usr/lib"
++	elif test -f /usr/local/lib/libjpeg-mmx.a ; then
++		AC_MSG_RESULT(found)
++		JPEG_MMX_OK="found"
++		JPEG_MMX="/usr/local/lib"
++	else
++		AC_MSG_RESULT(not found)
++	fi
++else	
++	AC_MSG_CHECKING(for libjpeg-mmx in -> [${JPEG_MMX}] <-)	
++	if test -f ${JPEG_MMX}/libjpeg-mmx.a ; then
++		AC_MSG_RESULT(found)
++		JPEG_MMX_OK="found"
++	else
++		AC_MSG_RESULT(not found)
++	fi
++fi
++
++if test "${JPEG_MMX_OK}" = "found"; then
++	saved_CFLAGS="$CFLAGS"
++	saved_LIBS="$LIBS"
++	CFLAGS="$CFLAGS -I${JPEG_MMX}"
++	LIBS="$LIBS -L${JPEG_MMX}"
++	AC_CHECK_LIB(jpeg-mmx, jpeg_start_compress,
++		[ TEMP_LIBS="$TEMP_LIBS -ljpeg-mmx"
++		TEMP_CFLAGS="${TEMP_CFLAGS} -I${JPEG_MMX}"
++		JPEG_SUPPORT="yes"],,)
++	LIBS="$saved_LIBS"
++	CFLAGS="$saved_CFLAGS"
++	JPEG_SUPPORT_MMX="yes"
++fi
++
++#
++# Look for _a_ jpeg lib that will work.
++#
++if test x$JPEG_SUPPORT != xyes ; then
++  # Checks for libraries
++  LDFLAGS=$TEMP_LDFLAGS
++
++  AC_CHECK_LIB(jpeg, jpeg_set_defaults, [
++		TEMP_LIBS="$TEMP_LIBS -ljpeg"
++		JPEG_SUPPORT="yes"
++	], [
++		echo
++		echo "You do not have libjpeg installed"
++		echo
++	]
++  )
++fi
++
++
++#
++# Check for libavcodec and libavformat from ffmpeg
++#
++FFMPEG_DIR="yes"
++FFMPEG_OK="no_found"
++FFMPEG_OBJ=""
++AC_ARG_WITH(ffmpeg,
++[  --with-ffmpeg[=DIR]       Specify the prefix for the install path for
++                          libavcodec/libavformat (part of ffmpeg) be able to 
++                          encode mpeg movies realtime.
++                          If this is not specified motion will try to find
++                          the libraries in /usr and /usr/local.
++                          ],
++FFMPEG_DIR="$withval"
++)
++
++# 
++# ffmpeg headers custom location
++#
++FFMPEG_HEADERS_DIR="yes"
++AC_ARG_WITH(ffmpeg_headers,
++[  --with-ffmpeg-headers[=DIR] Specify the prefix for ffmpeg headers.
++                               ],
++FFMPEG_HEADERS_DIR="$withval"
++)
++
++#
++# ffmpeg custom extra libraries
++#
++FFMPEG_EXTRALIBS=" -lavformat -lavcodec -lavutil -lm -lz "
++AC_ARG_WITH(ffmpeg-libs,
++[  --with-ffmpeg-libs[=libs]  Specify the extra libs for ffmpeg
++                               ],
++FFMPEG_EXTRALIBS="$withval"
++)
++
++#
++# --without-ffmpeg or with-ffmpeg=no
++#
++if test "${FFMPEG_DIR}" = "no"; then
++	AC_MSG_CHECKING(for ffmpeg)
++	AC_MSG_RESULT(skipping)
++#
++# with-ffmpeg=<dir> or nothing
++#
++else if test "${FFMPEG_DIR}" = "yes"; then
++	# AUTODETECT STATIC/SHARED LIB 
++	AC_MSG_CHECKING(for ffmpeg autodetecting libraries)
++
++	if test -f /usr/lib64/libavcodec.a -o -f /usr/lib64/libavcodec.so && test -f /usr/lib64/libavformat.a -o -f /usr/lib64/libavformat.so ; then
++		AC_MSG_RESULT(found in /usr/lib64)
++		FFMPEG_OK="found"
++		FFMPEG_LIB="/usr/lib64"
++		FFMPEG_DIR="/usr"
++	elif test -f /usr/lib/libavcodec.a -o -f /usr/lib/libavcodec.so && test -f /usr/lib/libavformat.a -o -f /usr/lib/libavformat.so ; then
++		AC_MSG_RESULT(found in /usr/lib)
++		FFMPEG_OK="found"
++		FFMPEG_LIB="/usr/lib"
++		FFMPEG_DIR="/usr"
++	elif test -f /usr/local/lib/libavcodec.a -o -f /usr/local/lib/libavcodec.so && test -f /usr/local/lib/libavformat.a -o -f /usr/local/lib/libavformat.so ; then
++		AC_MSG_RESULT(found in /usr/local/lib)
++		FFMPEG_OK="found"
++		FFMPEG_LIB="/usr/local/lib"
++		FFMPEG_DIR="/usr/local"
++    elif test -f /usr/lib/x86_64-linux-gnu/libavcodec.a -o -f /usr/lib/x86_64-linux-gnu/libavcodec.so && test /usr/lib/x86_64-linux-gnu/libavformat.a -o -f /usr/lib/x86_64-linux-gnu/libavformat.so ; then
++        AC_MSG_RESULT(found in /usr/lib/x86_64-linux-gnu)
++        FFMPEG_OK="found"
++        FFMPEG_LIB="/usr/lib/x86_64-linux-gnu"
++        FFMPEG_DIR="/usr"
++	else
++		AC_MSG_RESULT(not found)
++		echo ""
++		echo "**********************************************"
++		echo "* libavcodec.a or libavcodec.so or           *"
++		echo "* libavformat.a or libavformat.so not found: *"
++		echo "*    ALL FFMPEG FEATURES DISABLED            *"
++		echo "*                                            *"
++		echo "* Please read the Motion Guide for help:     *"
++		echo "* http://motion.sourceforge.net              *"
++		echo "**********************************************"
++		echo ""		
++	fi 
++else
++	AC_MSG_CHECKING(for ffmpeg libraries in -> [${FFMPEG_DIR}] <-)
++	if test -f ${FFMPEG_DIR}/lib/libavcodec.a -o -f ${FFMPEG_DIR}/lib/libavcodec.so && test -f ${FFMPEG_DIR}/lib/libavformat.a -o -f ${FFMPEG_DIR}/lib/libavformat.so ; then
++		AC_MSG_RESULT(found)
++		FFMPEG_OK="found"
++		FFMPEG_LIB="${FFMPEG_DIR}/lib"
++	elif test -f ${FFMPEG_DIR}/libavcodec.a -o -f ${FFMPEG_DIR}/libavcodec.so && test -f ${FFMPEG_DIR}/libavformat.a -o -f ${FFMPEG_DIR}/libavformat.so ; then
++		AC_MSG_RESULT(found)
++		FFMPEG_LIB="${FFMPEG_DIR}"
++		FFMPEG_OK="found"
++	else
++		AC_MSG_RESULT(not found)
++		if test "${FFMPEG_OK}" != "found"; then
++			echo ""
++			echo "**********************************************"
++			echo "* libavcodec.a or libavcodec.so or           *"
++			echo "* libavformat.a or libavformat.so not found: *"
++			echo "*    ALL FFMPEG FEATURES DISABLED            *"
++			echo "*                                            *"
++			echo "* Please read the Motion Guide for help:     *"
++			echo "* http://motion.sourceforge.net              *"
++			echo "**********************************************"
++			echo ""
++		fi
++	fi
++fi
++
++
++#
++# Now check for ffmpeg headers ( avformat.h ) if ffmpeg libs were found
++#
++
++AVFORMAT_DIR=""
++
++if test "${FFMPEG_OK}" = "found"; then
++    if test "${FFMPEG_HEADERS_DIR}" = "yes"; then
++        AC_MSG_CHECKING(for ffmpeg headers in ${FFMPEG_DIR})
++        AVFORMAT_DIR="${FFMPEG_DIR}"
++    else
++        AC_MSG_CHECKING(for ffmpeg headers in ${FFMPEG_HEADERS_DIR})
++        FFMPEG_DIR="${FFMPEG_HEADERS_DIR}"
++        AVFORMAT_DIR="${FFMPEG_DIR}"
++    fi
++
++    if test -f ${FFMPEG_DIR}/include/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/avformat.h"
++    elif test -f ${FFMPEG_DIR}/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}"
++        AVFORMAT_DIR="${FFMPEG_DIR}/avformat.h"
++    elif test -f ${FFMPEG_DIR}/include/ffmpeg/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/ffmpeg/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg"
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/avformat.h"
++    elif test -f ${FFMPEG_DIR}/include/libavformat/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/libavformat/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat" 
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/libavformat/avformat.h"
++    elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat" 
++        AVFORMAT_DIR="${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h"
++    elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
++        AC_MSG_RESULT(found ${FFMPEG_DIR}/libavformat/avformat.h)
++        FFMPEG_CFLAGS="-I${FFMPEG_DIR} -DFFMPEG_NEW_INCLUDES"
++        AVFORMAT="-I{FFMPEG_DIR}/libavformat"
++        AVFORMAT_DIR="${FFMPEG_DIR}/libavformat/avformat.h"
++    else
++        AC_MSG_RESULT(not found)
++        FFMPEG_OK="no_found"
++        AVFORMAT_DIR="avformat.h"
++        echo "**********************************************"
++        echo "*       avformat.h not found:                *"
++        echo "*    ALL FFMPEG FEATURES DISABLED            *"
++        echo "*                                            *"
++        echo "* Please read the Motion Guide for help:     *"
++        echo "* http://motion.sourceforge.net              *"
++        echo "**********************************************"
++        echo ""
++    fi
++
++#
++# If ffmpeg libs and headers have been found 
++#
++
++    if  test "${FFMPEG_OK}" = "found"; then	
++        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} ${FFMPEG_EXTRALIBS}"
++        TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
++        TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
++
++        FFMPEG_OBJ="ffmpeg.o"
++        AC_SUBST(FFMPEG_OBJ)
++
++        AC_MSG_CHECKING(avformat)
++        AC_RUN_IFELSE([AC_LANG_SOURCE([
++            [
++             #include <${AVFORMAT_DIR}>
++             int main(void){
++                 if (LIBAVFORMAT_VERSION_MAJOR >= 55) return -1;
++                 return 0;
++             }
++            ]])],
++            [AC_MSG_RESULT(version previous to 55)],
++            [
++             AC_MSG_RESULT(version 55 or higher)
++             TEMP_CFLAGS="${TEMP_CFLAGS} -DFFMPEG_V55"
++             RTPS_OBJ="netcam_rtsp.o"
++             AC_SUBST(RTPS_OBJ)
++            ]
++        )
++
++        AC_MSG_CHECKING([file_protocol is defined in ffmpeg ?])
++        saved_CFLAGS=$CFLAGS
++        saved_LIBS=$LIBS
++
++        CFLAGS="${FFMPEG_CFLAGS} ${AVFORMAT}"
++        LIBS="$TEMP_LIBS"
++    	
++        AC_COMPILE_IFELSE([AC_LANG_SOURCE([
++            [
++             #include <${AVFORMAT_DIR}>
++             URLProtocol test_file_protocol;
++             int main(void){
++                 test_file_protocol.url_read  = file_protocol.url_read;
++                 return 0;
++             }
++            ]])],
++            [AC_MSG_RESULT(yes)],
++            [
++             AC_MSG_RESULT(no)
++             TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG_NEW"
++            ]
++        )
++        CFLAGS=$saved_CFLAGS
++        LIBS=$saved_LIBS
++    fi
++fi	
++fi
++
++
++#
++# Check SQLITE3
++#
++
++SQLITE3_SUPPORT="no"
++AC_ARG_WITH(sqlite3,
++    [  --without-sqlite3       Disable sqlite3 support in motion.
++    ],
++    SQLITE3="$withval"
++    # if not given argument, assume standard
++)
++
++if test "${SQLITE3}" = "no"; then
++    AC_MSG_CHECKING(for sqlite3)
++    AC_MSG_RESULT(skipping)
++else
++    saved_CFLAGS=$CFLAGS
++    saved_LIBS=$LIBS
++
++    AC_CHECK_LIB(sqlite3, sqlite3_open,
++    [
++    TEMP_LIBS="$TEMP_LIBS -lsqlite3"
++    SQLITE3_SUPPORT="yes"
++    AC_DEFINE([HAVE_SQLITE3],1,[Define to 1 if you have SQLITE3 support])
++    ]
++    )
++
++    CFLAGS=$saved_CFLAGS
++    LIBS=$saved_LIBS
++fi    
++
++
++#
++# Check Mysql
++#
++
++MYSQL="yes"
++MYSQL_SUPPORT="no"
++MYSQL_HEADERS="yes"
++MYSQL_LIBS="yes"
++
++AC_MSG_CHECKING(for mysql support)
++
++AC_ARG_WITH(mysql,
++[  --without-mysql         Disable mysql support in motion.
++                          ],
++MYSQL="$withval"
++# if not given argument, assume standard
++)
++
++AC_ARG_WITH(mysql-lib,
++[  --with-mysql-lib[=DIR]        Normally, configure will scan all possible default
++                          installation paths for mysql libs. When it fails, use
++                          this command to tell configure where mysql libs
++                          installation root directory is.
++                          ],
++MYSQL_LIBS="$withval"
++# if not given argument, assume standard
++)
++
++
++AC_ARG_WITH(mysql-include,
++[  --with-mysql-include[=DIR]    Normally, configure will scan all possible default
++                          installation paths for mysql include. When it fails, use
++                          this command to tell configure where mysql include
++                          installation root directory is.
++                          ],
++MYSQL_HEADERS="$withval"
++# if not given argument, assume standard
++)
++
++
++if test "${MYSQL}" = "no"; then
++	AC_MSG_RESULT(skipped)
++else
++	AC_MSG_RESULT(testing)
++	# ******* Search mysql headers *******
++
++	if test "${MYSQL_HEADERS}" = "yes"; then
++		AC_MSG_CHECKING(autodect mysql headers)
++		# Autodetect
++		for w in /usr/include /usr/local/include /usr/mysql /usr/local/mysql /usr/local/mysql/include /opt /opt/mysql; do
++			# check for plain setups
++			if test -f $w/mysql.h; then
++				MYSQL_INCDIR=$w
++				break
++			fi
++			# check for "/usr/include/<packagename>" type setups
++			if test -f $w/mysql/mysql.h; then
++				MYSQL_INCDIR=$w/mysql
++				break
++			fi
++			# check for "/usr/<packagename>/include" type setups
++			if test -f $w/mysql/include/mysql.h; then
++				MYSQL_INCDIR=$w/mysql/include
++				break
++			fi
++		done
++	elif test "${MYSQL_HEADERS}" = "no"; then
++		AC_MSG_CHECKING(for mysql headers)	
++		AC_MSG_RESULT(skipped)
++	else
++		AC_MSG_CHECKING(for mysql headers in $MYSQL_HEADERS)
++		# Manual detection for <withval>
++        	if test -f $MYSQL_HEADERS/mysql.h; then
++                	MYSQL_INCDIR=$MYSQL_HEADERS
++	        fi
++	fi
++
++	if test -z "$MYSQL_INCDIR" ; then
++		MYSQL_HEADERS="no"
++		AC_MSG_RESULT(not found)
++		echo "Invalid MySQL directory - unable to find mysql.h."
++	else
++		AC_MSG_RESULT($MYSQL_INCDIR yes)
++		MYSQL_HEADERS="yes"
++	fi
++
++
++	if test "${MYSQL_HEADERS}" = "yes"; then
++
++	# ******* Search mysql libs *********
++	if test "${MYSQL_LIBS}" = "yes"; then
++		AC_MSG_CHECKING(autodect mysql libs)
++        	# Autodetect
++		for w in /usr/lib64 /usr/lib /usr/local/lib /usr/mysql /usr/local/mysql /usr/local/mysql/lib /opt /opt/mysql /usr/lib/x86_64-linux-gnu; do
++			# check for plain setups
++			if test -f $w/libmysqlclient.a -o -f $w/libmysqlclient.so; then
++				MYSQL_LIBDIR=$w
++				break
++			fi
++			# check for "/usr/lib/<packagename>" type setups
++			if test -f $w/mysql/libmysqlclient.a -o -f $w/mysql/libmysqlclient.so; then
++				MYSQL_LIBDIR=$w/mysql
++				break
++			fi
++			# check for "/usr/<packagename>/lib" type setups
++			if test -f $w/mysql/lib/libmysqlclient.a -o -f $w/mysql/lib/libmysqlclient.so; then
++				MYSQL_LIBDIR=$w/mysql/lib
++				break
++			fi
++		done
++	elif test "${MYSQL_LIBS}" = "no"; then
++        	AC_MSG_CHECKING(for mysql libs)
++	        AC_MSG_RESULT(skipped)
++	else
++		AC_MSG_CHECKING(for mysql libs in $MYSQL_LIBS)
++		# Manual detection for <withval>
++		if test -f $MYSQL_LIBS/libmysqlclient.a -o -f $MYSQL_LIBS/libmysqlclient.so; then
++			MYSQL_LIBDIR=$MYSQL_LIBS
++		fi
++	fi
++
++
++	if test -z "$MYSQL_LIBDIR" ; then
++		AC_MSG_RESULT(not found)
++		echo "Invalid MySQL directory - unable to find libmysqlclient.a or libmysqlclient.so."
++	else
++		AC_MSG_RESULT($MYSQL_LIBDIR)
++		#LDFLAGS="-L$MYSQL_LIBDIR"
++		saved_CFLAGS=$CFLAGS
++		saved_LIBS=$LIBS
++		CFLAGS="-I$MYSQL_INCDIR"
++		LIBS="-L$MYSQL_LIBDIR"
++		AC_CHECK_LIB(mysqlclient,mysql_init,[	
++					TEMP_LIBS="$TEMP_LIBS -L$MYSQL_LIBDIR -lmysqlclient -lz"
++					TEMP_CFLAGS="$TEMP_CFLAGS -I$MYSQL_INCDIR"
++					MYSQL_SUPPORT="yes"
++					AC_DEFINE([HAVE_MYSQL],1,[Define to 1 if you have MySQL support])
++					],
++					AC_MSG_ERROR(MySQL support can't build without MySQL libraries))	
++		CFLAGS=$saved_CFLAGS
++		LIBS=$saved_LIBS
++	fi
++
++	# end mysql-include , mysql-libs
++	fi
++
++# end Mysql detection
++fi
++
++
++#
++# Check PostgreSQL
++#
++PGSQL="yes"
++PGSQL_SUPPORT="no"
++PGSQL_HEADERS="yes"
++PGSQL_LIBS="yes"
++
++AC_DEFUN([PGSQL_INC_CHK],[if test -r $i$1/libpq-fe.h; then PGSQL_DIR=$i; PGSQL_INCDIR=$i$1])
++
++AC_ARG_WITH(pgsql,
++[  --without-pgsql         Disable PostgreSQL support in motion.
++                          ],
++PGSQL="$withval"
++# if not given argument, assume standard
++)
++
++AC_ARG_WITH(pgsql-lib,
++[  --with-pgsql-lib[=DIR]        Normally, configure will scan all possible default
++                          installation paths for pgsql libs. When it fails, use
++                          this command to tell configure where pgsql libs
++                          installation root directory is.
++                          ],
++PGSQL_LIBS="$withval"
++# if not given argument, assume standard
++)
++
++AC_ARG_WITH(pgsql-include,
++[  --with-pgsql-include[=DIR]    Normally, configure will scan all possible default
++                          installation paths for pgsql include. When it fails, use
++                          this command to tell configure where pgsql include
++                          installation root directory is.
++                          ],
++PGSQL_HEADERS="$withval"
++# if not given argument, assume standard
++)
++
++AC_MSG_CHECKING(for PostgreSQL)
++
++if test "${PGSQL}" = "no"; then
++	AC_MSG_RESULT(skipped)
++else
++	AC_MSG_RESULT(testing)
++
++	# ******* Search pgsql headers *******
++	if test "${PGSQL_HEADERS}" = "yes"; then
++
++		AC_MSG_CHECKING(autodect pgsql headers)
++		# Autodetect
++		for i in /usr /usr/local /usr/local/pgsql $PHP_PGSQL; do
++			PGSQL_INC_CHK(/include)
++			el[]PGSQL_INC_CHK(/include/pgsql)
++			el[]PGSQL_INC_CHK(/include/postgresql)
++			fi
++		done
++		
++	elif test "${PGSQL_HEADERS}" = "no"; then
++		AC_MSG_CHECKING(for pgsql headers)	
++		AC_MSG_RESULT(skipped)
++	else
++		AC_MSG_CHECKING(for pgsql headers in $PGSQL_HEADERS)
++		# Manual detection for <withval>
++        	if test -f $PGSQL_HEADERS/libpq-fe.h; then
++                	PGSQL_INCDIR=$PGSQL_HEADERS
++	        fi
++	fi
++
++	if test -z "$PGSQL_INCDIR" ; then
++		PGSQL_HEADERS="no"
++		AC_MSG_RESULT(not found)
++		echo "Invalid PostgreSQL directory - unable to find libpq-fe.h."
++	else
++		AC_MSG_RESULT(yes [$PGSQL_INCDIR])
++		PGSQL_HEADERS="yes"
++	fi
++
++
++	if test "${PGSQL_HEADERS}" = "yes"; then
++
++		# ******* Search pgsql libs *********
++		if test "${PGSQL_LIBS}" = "yes"; then
++			AC_MSG_CHECKING(autodect pgsql libs)
++			# Autodetect
++			PGSQL_INCLUDE="-I$PGSQL_INCDIR"
++			PGSQL_LIBDIR=$PGSQL_DIR/lib
++
++			if test -f /usr/lib64/libpq.so ; then
++				PGSQL_LIBDIR=/usr/lib64
++			elif test -f $PGSQL_DIR/lib/pgsql/libpq.so ; then
++				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql 
++			elif test -f $PGSQL_DIR/lib/postgresql/libpq.so ; then
++				PGSQL_LIBDIR=$PGSQL_DIR/lib/postgresql
++			elif test -f $PGSQL_DIR/lib/libpq.so ; then	
++				PGSQL_LIBDIR=$PGSQL_DIR/lib
++			else
++				PGSQL_LIBDIR=""
++			fi
++
++			AC_MSG_RESULT($PGSQL_LIBDIR)
++
++		elif test "${PGSQL_LIBS}" = "no"; then
++	        	AC_MSG_CHECKING(for pgsql libs)
++		        AC_MSG_RESULT(skipped)
++		else
++			AC_MSG_CHECKING(for pgsql libs in $PGSQL_LIBS)
++			# Manual detection for <withval>
++			if test -f $PGSQL_LIBS/libpq.a -o -f $PGSQL_LIBS/libpq.so; then
++				PGSQL_LIBDIR=$PGSQL_LIBS
++			fi
++		fi
++
++
++		if test -z "$PGSQL_LIBDIR" ; then
++			AC_MSG_RESULT(not found)
++			echo "Invalid PostgreSQL directory [$PGSQL_LIBDIR] - unable to find libpq.a or libpq.so."
++		else
++			#LDFLAGS="$TEMP_LDFLAGS -L$PGSQL_LIBDIR"
++			saved_CFLAGS=$CFLAGS
++			saved_LIBS=$LIBS
++			CFLAGS="-I$PGSQL_INCDIR"
++			LIBS="-L$PGSQL_LIBDIR"
++			AC_CHECK_LIB(pq, PQconnectStart, [
++						PGSQL_SUPPORT="yes"
++						TEMP_LIBS="$TEMP_LIBS -L$PGSQL_LIBDIR -lpq"
++						TEMP_CFLAGS="$TEMP_CFLAGS -I$PGSQL_INCDIR"
++						AC_DEFINE([HAVE_PGSQL],1,[Define to 1 if you have PostgreSQL support])
++					], 
++			AC_MSG_ERROR(PostgreSQL support can't build without PostgreSQL libraries))
++			LDFLAGS=""	
++			CFLAGS=$saved_CFLAGS
++			LIBS=$saved_LIBS
++		fi
++		
++	fi # end pgsql-include , pgsql-libs
++
++# end PostgreSQL detection
++fi
++
++
++#Checks for header files.
++AC_HEADER_STDC
++AC_CHECK_HEADERS(stdio.h unistd.h stdint.h fcntl.h time.h signal.h sys/ioctl.h sys/mman.h linux/videodev.h linux/videodev2.h sys/param.h sys/types.h)
++
++AC_CHECK_FUNCS(get_current_dir_name)
++
++# Check if v4l2 is available
++SUPPORTED_V4L2=false
++SUPPORTED_V4L2_old=false
++
++if test "${V4L}" = "no"; then
++	AC_MSG_CHECKING(for V42L support)
++	AC_MSG_RESULT(skipping)
++else
++	AC_CHECK_TYPE([struct v4l2_buffer], 
++        	      [SUPPORTED_V4L2=true],
++             	 [SUPPORTED_V4L2=false],
++	       	 [#include <sys/time.h>
++			#include <linux/videodev.h>])
++
++	AC_MSG_CHECKING(for V42L support)
++	if test x$SUPPORTED_V4L2 = xtrue; then
++		AC_MSG_RESULT(yes)
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DMOTION_V4L2"
++	else	
++		AC_MSG_RESULT(no)
++	fi
++
++	# linux/videodev.h doesn't include videodev2.h
++	if test x$SUPPORTED_V4L2 = xfalse; then
++		AC_MSG_CHECKING(for V42L *old* support)
++		AC_MSG_RESULT(testing)
++		AC_CHECK_HEADERS(linux/videodev2.h,[SUPPORTED_V4L2_old=true],[], [#include <asm/types.h>])
++	fi
++
++
++	if test x$SUPPORTED_V4L2_old = xtrue; then
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DMOTION_V4L2 -DMOTION_V4L2_OLD"
++		SUPPORTED_V4L2=true
++	fi
++
++fi
++
++
++# Check sizes of integer types
++AC_CHECK_SIZEOF(short)
++AC_CHECK_SIZEOF(int)
++AC_CHECK_SIZEOF(long int)
++AC_CHECK_SIZEOF(long long)
++AC_CHECK_SIZEOF(int *)
++AC_CHECK_SIZEOF(void *)
++
++if test "$ac_cv_sizeof_short" = "4"; then
++	TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"short\""
++else
++	if test "$ac_cv_sizeof_int" = "4"; then
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"int\""
++	else
++		if test "$ac_cv_sizeof_long_int" = "4"; then
++			TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"long int\""
++		fi
++	fi
++fi
++
++
++OPTIMIZECPU="yes"
++
++AC_ARG_WITH(optimizecpu,
++[  --without-optimizecpu   Exclude autodetecting platform and cpu type.
++                          This will disable the compilation of gcc
++                          optimizing code by platform and cpu.
++			  ],
++OPTIMIZECPU="$withval"
++)
++
++DEVELOPER_FLAGS="no"
++
++AC_ARG_WITH(developer-flags,
++[  --with-developer-flags  Causes practically all of the possible gcc
++                          warning flags to be set.  This may produce
++                          a large amount of warnings.],
++DEVELOPER_FLAGS="$withval"
++)
++
++# Checks for typedefs, structures, and compiler characteristics.
++AC_C_CONST
++
++if test "${FreeBSD}" != ""; then
++	OPTIMIZECPU=""
++fi
++
++if test "${OPTIMIZECPU}" = "yes"; then
++
++# Try to autodetect cpu type
++CPU_NAME="unknown"
++CPU_TYPE="unknown"
++if test -e "/proc/cpuinfo" ; then
++	intel[[30]]="-march=i386"
++	intel[[32]]="-march=i386"
++	intel[[34]]="-march=i386"
++	intel[[40]]="-march=i486"
++	intel[[41]]="-march=i486"
++	intel[[42]]="-march=i486"
++	intel[[43]]="-march=i486"
++	intel[[44]]="-march=i486"
++	intel[[45]]="-march=i486"
++	intel[[47]]="-march=i486"
++	intel[[48]]="-march=i486"
++	intel[[51]]="-march=pentium"
++	intel[[52]]="-march=pentium"
++	intel[[54]]="-march=pentium-mmx"
++	intel[[56]]="-march=pentium-mmx"
++	intel[[61]]="-march=pentiumpro"
++	intel[[63]]="-march=pentium2"
++	intel[[65]]="-march=pentium2"
++	intel[[66]]="-march=pentium2"
++	intel[[67]]="-march=pentium3"
++	intel[[68]]="-march=pentium3"
++	intel[[610]]="-march=pentium3"
++	intel[[611]]="-march=pentium3"
++	intel[[150]]="-march=pentium4"
++	intel[[151]]="-march=pentium4"
++	intel[[152]]="-march=pentium4"
++	intel[[154]]="-march=pentium4"
++	intel[[614]]="-march=prescott"
++	intel[[628]]="-march=core2"
++	amd[[50]]="-march=i586"
++	amd[[51]]="-march=i586"
++	amd[[52]]="-march=i586"
++	amd[[53]]="-march=i586"
++	amd[[56]]="-march=k6"
++	amd[[57]]="-march=k6"
++	amd[[58]]="-march=k6-2"
++	amd[[510]]="-march=k6-2"
++	amd[[59]]="-march=k6-3"
++	amd[[513]]="-march=k6-3"
++	amd[[61]]="-march=athlon"
++	amd[[62]]="-march=athlon"
++	amd[[63]]="-march=athlon"
++	amd[[64]]="-march=athlon"
++	amd[[66]]="-march=athlon"
++	amd[[67]]="-march=athlon"
++	amd[[68]]="-march=athlon"
++	amd[[610]]="-march=athlon"
++	amd[[158]]="-march=athlon-xp"
++	amd[[154]]="-march=k8"
++	amd[[155]]="-march=athlon64"
++	amd[[1543]]="-march=athlon64"
++	amd[[1544]]="-march=athlon64"
++	amd[[1565]]="-march=opteron"
++	amd[[1572]]="-march=k8" 
++	via[[67]]="-march=c3"
++	via[[68]]="-march=c3"
++	via[[69]]="-march=i686" 
++	via[[610]]="-march=i686"
++	
++	CPU_TYPE="known"
++	CPU_FAMILY=`cat /proc/cpuinfo | grep "cpu family" | head -n1`
++	CPU_MODEL=`cat /proc/cpuinfo | grep model[[^\ ]] | head -n1`
++	CPU_NAME=`cat /proc/cpuinfo | grep "model name" | head -n1`
++	CPU_FLAGS=`cat /proc/cpuinfo | grep "flags" | head -n1`
++	CPU_VENDOR=`cat /proc/cpuinfo | grep "vendor_id" | head -n1`
++	CPU_FAMILY=${CPU_FAMILY#*: }
++	CPU_MODEL=${CPU_MODEL#*: }
++	CPU_NAME=${CPU_NAME#*: }
++	CPU_FLAGS=${CPU_FLAGS#*: }
++	CPU_VENDOR=${CPU_VENDOR#*: }
++	if test "x${CPU_VENDOR}" = "xGenuineIntel" ; then
++		CPU_OPTIONS=${intel[[$CPU_FAMILY$CPU_MODEL]]}
++	fi
++	if test "x${CPU_VENDOR}" = "xAuthenticAMD" ; then
++		CPU_OPTIONS=${amd[[$CPU_FAMILY$CPU_MODEL]]}
++	fi
++	if test "x${CPU_VENDOR}" = "xCentaurHauls"; then
++		CPU_OPTIONS=${via[[$CPU_FAMILY$CPU_MODEL]]}
++	fi
++	if test "x${CPU_OPTIONS}" = "x" ; then
++		CPU_TYPE="unknown"
++	fi
++	CPU_EXT=""
++	for i in $CPU_FLAGS ; do
++		case $i in
++		fpu)
++			CPU_FPU="-mfpmath=387"
++			;;
++		mmx)
++			CPU_EXT="$CPU_EXT -mmmx"
++			;;
++		sse)
++			CPU_FPU="-mfpmath=sse -msse"
++			;;
++		sse2)
++			CPU_FPU="-mfpmath=sse -msse2"
++			;;
++		sse3)
++			CPU_FPU="-msse3"
++			;;
++		ssse3)
++			CPU_FPU="-mfpmath=sse -msse2 -mssse3"
++			;;
++		3dnow)
++			CPU_EXT="$CPU_EXT -m3dnow"
++			;;
++		esac
++	done
++	CPU_OPTIONS="$CPU_OPTIONS $CPU_FPU $CPU_EXT"
++fi
++if test "x${CPU_TYPE}" = "xunknown"; then
++	CPU_TYPE=`( uname -p ) 2>&1`
++	case $CPU_TYPE in
++	i386)
++		CPU_OPTIONS="-march=i386"
++		;;
++	i486)
++		CPU_OPTIONS="-march=i486"
++		;;
++	Pentium2)
++		CPU_OPTIONS="-march=pentium2"
++		;;
++	Pentiumpro)
++		CPU_OPTIONS="-march=pentiumpro"
++		;;
++	Pentium*)
++		CPU_OPTIONS="-march=pentium"
++		;;
++	k6)
++		CPU_OPTIONS="-march=k6"
++		;;
++	k6-2)
++		CPU_OPTIONS="-march=k6-2"
++		;;
++	k6-3)
++		CPU_OPTIONS="-march=k6-3"
++		;;
++	"VIA C3 Ezra")
++		CPU_OPTIONS="-march=c3"
++		CPU_TYPE="known"
++               ;;
++	*)
++		CPU_OPTIONS=""
++		CPU_TYPE="unknown"
++		;;
++	esac
++	if test "x${CPU_TYPE}" = "xunknown"; then
++		CPU_TYPE=`( uname -m ) 2>&1`
++		case $CPU_TYPE in
++		i386)
++			CPU_OPTIONS="-march=i386"
++			;;
++		i486)
++			CPU_OPTIONS="-march=i486"
++			;;
++		i586)
++			CPU_OPTIONS="-march=i586"
++			;;
++		i686)
++			CPU_OPTIONS="-march=i686"
++			;;
++		Pentium2)
++			CPU_OPTIONS="-march=pentium2"
++			;;
++		Pentiumpro)
++			CPU_OPTIONS="-march=pentiumpro"
++			;;
++		k6)
++			CPU_OPTIONS="-march=k6"
++			;;
++		k6-2)
++			CPU_OPTIONS="-march=k6-2"
++			;;
++		k6-3)
++			CPU_OPTIONS="-march=k6-3"
++			;;
++		*)
++			CPU_OPTIONS="-march=native -mtune=native"
++			;;
++		esac
++	fi
++fi
++echo "Detected CPU: $CPU_NAME"
++# Now we check if the compiler supports the detected cpu
++COMPILER=$CC
++for I in "$TMPDIR" "$TEMPDIR" "/tmp" ; do
++	test "$I" && break
++done
++TMPC="$I/cpu_test-$RANDOM-$$.c"
++TMPO="$I/cpu_test-$RANDOM-$$.o"
++cat > $TMPC << EOF
++int main(void) { return 0; }
++EOF
++( $COMPILER $CPU_OPTIONS -o $TMPO $TMPC ) 2>&1
++TMP="$?"
++rm -f $TMPO
++rm -f $TMPC
++
++
++if test "x${TMP}" = "x1" ; then
++	CPU_OPTIONS=""
++	echo "No CPU optimizations will be added"
++else
++	echo "CPU optimization: $CPU_OPTIONS"
++fi
++
++else
++	CPU_OPTIONS=""
++fi
++
++
++AC_MSG_CHECKING(for bswap instruction)
++AC_LINK_IFELSE([
++	AC_LANG_PROGRAM([ ],
++		[unsigned int __x=0;
++		register unsigned int __v;
++		__asm("bswap %0" : "=r" (__v) : "0" (__x));])
++	],
++	[
++		TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_BSWAP"
++		AC_MSG_RESULT(yes)
++	],
++	[ 
++		AC_MSG_RESULT(no)
++	])
++
++
++if test "${DEVELOPER_FLAGS}" = "yes"; then
++	TEMP_CFLAGS="${TEMP_CFLAGS} -W -Wshadow -Wpointer-arith -Wcast-align -Wwrite-strings -Waggregate-return -Wstrict-prototypes -Wmissing-prototypes -Wnested-externs -Winline -Wredundant-decls -Wno-long-long -ggdb -g3"
++fi
++
++CFLAGS="${TEMP_CFLAGS} $UNAME_DEFS  $CPU_OPTIONS"
++
++LIBS="${TEMP_LIBS}"
++LDFLAGS="${TEMP_LDFLAGS}"
++
++
++#
++# Add the right exec path for rc scripts
++#
++if test $prefix = "NONE";then
++	BIN_PATH="$ac_default_prefix"
++	if test $exec_prefix = "NONE"; then
++		BIN_PATH="$BIN_PATH/bin"
++	else
++		BIN_PATH="$BIN_PATH/$bindir"
++	fi
++else
++	if test $exec_prefix = "NONE";then
++		BIN_PATH="$prefix/bin"
++	else
++		BIN_PATH="$prefix/$bindir"
++	fi
++fi
++
++
++AC_SUBST(BIN_PATH)
++
++AC_CONFIG_FILES([
++thread1.conf
++thread2.conf
++thread3.conf
++thread4.conf
++motion-dist.conf
++motion.init-FreeBSD.sh
++motion.init-Debian
++motion.init-Fedora
++motion.spec
++Makefile
++])
++AC_OUTPUT
++
++echo ""
++echo "   **************************"
++echo "      Configure status       "
++echo "      ${PACKAGE_NAME} ${PACKAGE_VERSION}"
++echo "   **************************"
++echo 
++
++
++if test "${Darwin}" != ""; then
++    echo "OS             :     Darwin"
++elif test "${FreeBSD}" != ""; then
++    echo "OS             :     *BSD"		
++else 
++    echo "OS             :     Linux"
++fi
++
++if test "${PTHREAD_SUPPORT}" = "yes"; then
++    echo "pthread support:     Yes"
++else
++    echo "pthread support:     No"
++    echo "**********************************************"
++    echo "** Fatal Error YOU MUST HAVE pthread Support *"
++    echo "**********************************************" 
++fi
++
++
++if test "${JPEG_SUPPORT_TURBO}" = "yes"; then
++    echo "jpeg turbo support:  Yes"
++elif test "${JPEG_SUPPORT_MMX}" = "yes"; then
++    echo "jpeg-mmx support:    Yes"
++elif test "${JPEG_SUPPORT}" = "yes"; then
++    echo "jpeg support:        Yes"
++else
++    echo "jpeg support:        No"
++    echo "**********************************************"
++    echo "** Fatal Error YOU MUST HAVE jpeg Support  ***"
++    echo "**********************************************"
++fi
++
++if test "${FreeBSD}" != ""; then
++	if test "${BKTR}" = "yes"; then
++        echo "BKTR included:       Yes"
++	else
++        echo "BKTR included:       No"
++	fi
++
++	if test "${PWCBSD}" = "yes"; then
++        echo "PWCBSD include:      Yes"
++	else
++        echo "PWCBSD include:      No"
++	fi
++
++else
++	if test "${V4L}" = "yes"; then
++        echo "V4L support:         Yes"
++	else
++        echo "V4L support:         No"
++	fi
++
++	if test x$SUPPORTED_V4L2 = xtrue; then
++        echo "V4L2 support:        Yes"	
++	else
++        echo "V4L2 support:        No"
++	fi
++fi
++
++if test "${SDL_SUPPORT}" = "yes"; then
++	echo "SDL support:         Yes"
++else
++	echo "SDL support:         No"
++fi
++
++if test "${FFMPEG_OK}" = "found"; then
++    echo "FFmpeg support:      Yes"
++else
++    echo "FFmpeg support:      No"
++fi
++
++if test "${SQLITE3_SUPPORT}" = "yes"; then
++    echo "SQLite3 support:     Yes"
++else
++    echo "SQLite3 support:     No"
++fi
++
++if test "${MYSQL_SUPPORT}" = "yes"; then
++    echo "MYSQL support:       Yes"
++else
++    echo "MYSQL support:       No"
++fi
++
++if test "${PGSQL_SUPPORT}" = "yes"; then
++    echo "PostgreSQL support:  Yes"
++else
++    echo "PostgreSQL support:  No"
++fi
++echo 
++echo "CFLAGS: $CFLAGS"
++echo "LIBS: $LIBS"
++echo "LDFLAGS: $LDFLAGS"
++echo
++echo  "Install prefix:       $prefix"
++echo
++
+diff --git a/configure.in b/configure.in
+deleted file mode 100644
+index f551e9a..0000000
+--- a/configure.in
++++ /dev/null
+@@ -1,1364 +0,0 @@
+-# Process this file with autoconf to produce a configure script
+-
+-AC_INIT(motion, esyscmd(['./version.sh']))
+-AC_CONFIG_SRCDIR([motion.c])
+-AC_CONFIG_HEADERS(config.h)
+-AC_PROG_CC
+-
+-
+-THREAD_CFLAGS=""
+-THREAD_CHECK="/usr/include/pthread.h"
+-
+-Darwin=""
+-FreeBSD=""
+-
+-LINUXTHREADS="no"
+-AC_ARG_WITH(linuxthreads,
+-[  --with-linuxthreads     Use linuxthreads in BSD instead of native pthreads
+-				]
+-				,
+-LINUXTHREADS="$withval"
+-)
+-
+-PWCBSD="no"
+-AC_ARG_WITH(pwcbsd,
+-[  --with-pwcbsd           Use pwcbsd based webcams ( only BSD )
+-]
+-,
+-PWCBSD="$withval"
+-)
+-
+-
+-AC_MSG_CHECKING(for Darwin)
+-Darwin=`uname -a | grep "Darwin"`
+-
+-if test "${Darwin}" = ""; then
+-	AC_MSG_RESULT(no)
+-	AC_MSG_CHECKING(for *BSD)
+-
+-	FreeBSD=`uname -a | grep "BSD"`
+-	if test "${FreeBSD}" = ""; then
+-		AC_MSG_RESULT(no)
+-		VIDEO="video.o video2.o video_common.o"
+-	else
+-		AC_MSG_RESULT(yes)
+-		if test "${LINUXTHREADS}" = "no"; then
+-			AC_MSG_CHECKING(Linuxthreads)
+-			AC_MSG_RESULT(skipping)
+-		else	
+-			THREAD_CHECK="/usr/local/include/pthread/linuxthreads/pthread.h"
+-			THREAD_LIB_CHECK="/usr/local/lib/liblthread.so"
+-		fi
+-
+-		if test "${PWCBSD}" != "no"; then
+-			VIDEO="video.o video2.o video_common.o"
+-			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include -DPWCBSD"
+-		else 
+-			VIDEO="video_freebsd.o"
+-			TEMP_CFLAGS="${CFLAGS} -I/usr/local/include"	
+-		fi
+-
+-		TEMP_LDFLAGS="${LDFLAGS} -L/usr/local/lib"
+-		TEMP_LIBS="-L/usr/local/lib"
+-		AC_MSG_RESULT(Build with PWCBSD support $PWCBSD)
+-
+-	fi
+-else
+-	TEMP_CFLAGS="${CFLAGS} -I/sw/include"
+-	TEMP_LDFLAGS="${LDFLAGS} -L/sw/lib"
+-	TEMP_LIBS="-L/sw/lib"
+-	VIDEO="video_freebsd.o"
+-	FINK_LIB="-L/sw/lib"
+-	Darwin="yes"
+-	V4L="no"
+-	AC_MSG_RESULT($Darwin)
+-fi
+-
+-
+-AC_SUBST(VIDEO)
+-
+-# Checks for programs.
+-AC_PROG_CC
+-
+-TEMP_LIBS="-lm ${TEMP_LIBS}"
+-TEMP_CFLAGS="${TEMP_CFLAGS} ${CFLAGS}"
+-TEMP_LDFLAGS="${TEMP_LDFLAGS} ${LDFLAGS}"
+-
+-if test "${FreeBSD}" != "" && test "${PWCBSD}" = "no"; then
+-
+-	AC_MSG_CHECKING(bktr headers in /usr/include/dev/bktr)
+-
+-	if test -f /usr/include/dev/bktr/ioctl_meteor.h && test -f /usr/include/dev/bktr/ioctl_bt848.h; then
+-		AC_MSG_RESULT(yes)
+-	else
+-		AC_MSG_RESULT(no)
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -DOLD_BKTR"
+-	fi
+-#
+-# Check to Exclude BKTR 
+-#
+-BKTR="yes"
+-AC_ARG_WITH(bktr,
+-[  --without-bktr          Exclude to use bktr subsystem , that usually useful
+-                          for devices as network cameras ( ONLY used in *BSD).
+-                          ]
+-                          ,
+-BKTR="$withval"
+-)
+-
+-	if test "${BKTR}" = "no"; then
+-        	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
+-	fi
+-
+-else
+-
+-#
+-# Check to Exclude V4L
+-#
+-V4L="yes"
+-AC_ARG_WITH(v4l,
+-[  --without-v4l           Exclude using v4l (video4linux) subsystem.
+-                          Makes Motion so it only supports network cameras.
+-                          ],
+-V4L="$withval"
+-)
+-
+-fi
+-
+-
+-if test "${V4L}" = "no"; then
+-	TEMP_CFLAGS="${TEMP_CFLAGS} -DWITHOUT_V4L"
+-fi
+-
+-
+-if test "${FreeBSD}" != "" && test "${LINUXTHREADS}" != "no" ; then
+-
+-AC_MSG_CHECKING(for linuxthreads)
+-
+-#
+-# Check for thread header
+-#
+-	if test -f "${THREAD_CHECK}"; then
+-       	HEADERS_THREAD_CFLAGS="-I/usr/local/include/pthread/linuxthreads"
+-       	THREADS="yes"
+-	else
+-       	THREADS="no"
+-	fi
+-
+-#
+-# Check for thread lib
+-#
+-	if test -f "${THREAD_LIB_CHECK}" ; then
+-		THREADS="yes"
+-		LIB_THREAD="-llthread -llgcc_r"
+-	else
+-       	THREADS="no"
+-	fi
+-
+-# Checks for Library linuxthreads for FreeBSD
+-#
+-# linuxthreads on freeBSD, ports collection
+-# /usr/local/include/pthreads/linuxthreads/pthread.h
+-# #include <linuxthreads/pthread.h>
+-# /usr/local/lib/libpthread.so
+-#
+-
+-	if test "${THREADS}" = "yes"; then
+-		TEMP_CFLAGS="${HEADERS_THREAD_CFLAGS} $TEMP_CFLAGS -DWITH_LINUXTREADS"
+-        TEMP_LIBS="$TEMP_LIBS ${LIB_THREAD}"
+-        THREAD_CFLAGS="-D_THREAD_SAFE"
+-        PTHREAD_SUPPORT="yes"
+-        AC_MSG_RESULT($THREADS)
+-    else
+-        PTHREAD_SUPPORT="no"
+-        AC_MSG_RESULT($THREADS)
+-        echo
+-        echo "You do not have linuxthread installed"
+-        echo
+-    fi
+-
+-elif test -f "${THREAD_CHECK}"; then
+-
+-
+-AC_MSG_CHECKING(threads)
+-AC_TRY_LINK([#include <pthread.h>],
+-[pthread_t th; pthread_join(th, 0);
+- pthread_attr_init(0); pthread_cleanup_push(0, 0);
+- pthread_create(0,0,0,0); pthread_cleanup_pop(0); ],
+- [PTHREAD_LIB=yes])
+-
+-if test x$PTHREAD_LIB != xyes; then
+-
+-	if test "${FreeBSD}" != ""; then
+-		TEMP_LIBS="$TEMP_LIBS -pthread"
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -D_REENTRANT -D_THREAD_SAFE"
+-	else
+-		TEMP_LIBS="$TEMP_LIBS -lpthread"
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -D_REENTRANT"
+-	fi
+-	PTHREAD_SUPPORT="yes"
+-fi
+-	AC_MSG_RESULT($PTHREAD_SUPPORT)                        
+-
+-else
+-	echo 
+-	echo "You do not have threads support"
+-	echo	
+-fi
+-
+-
+-#
+-# Check for sdl library
+-#
+-SDL_SUPPORT="no"
+-AC_ARG_WITH(sdl,
+-[  --without-sdl           Compile without sdl support to get stream in SDL window.
+-],
+-[],
+-[])
+-AC_MSG_CHECKING(for sdl)
+-if test "x$withval" = "xno"; then
+-	AC_MSG_RESULT(skipped)
+-else
+-	if test "${FreeBSD}" != ""; then
+-		CONFIG_SDL='sdl11-config'
+-	else
+-		CONFIG_SDL='sdl-config'
+-	fi
+-	if test -z "`($CONFIG_SDL --version) 2>/dev/null`" ;then
+-		AC_MSG_RESULT(no)
+-		if test "$withval" = "yes"; then
+-			echo ""
+-			echo "****************************************************"
+-			echo "* sdl-config could not be found. Please install it *"
+-			echo "* and remove the --with-sdl configure argument.    *"
+-			echo "* libSDL can be found at http://www.libsdl.org     *"
+-			echo "****************************************************"
+-			echo ""
+-		fi
+-	else
+-		AC_MSG_RESULT(yes)
+-		SDL_SUPPORT="yes"
+-		TEMP_LIBS="$TEMP_LIBS `${CONFIG_SDL} --libs`"
+-		TEMP_CFLAGS="${TEMP_CFLAGS} `${CONFIG_SDL} --cflags`"
+-		AC_DEFINE([HAVE_SDL],1,[Define to 1 if you have SDL support])
+-		SDL_OBJ="sdl.o"
+-		AC_SUBST(SDL_OBJ)
+-	fi
+-fi
+-
+-#
+-# Check for the libjpeg-turbo library
+-#
+-JPEG_TURBO="no"
+-JPEG_TURBO_OK="not_found"
+-
+-AC_ARG_WITH(jpeg-turbo,
+-[  --with-jpeg-turbo[=DIR]   Specify the prefix for the install path for
+-                          jpeg-turbo for optimized jpeg handling (optional).
+-                          ],
+-JPEG_TURBO="$withval"
+-)
+-
+-if test "${JPEG_TURBO}" = "no"; then
+-    AC_MSG_CHECKING(for libjpeg-turbo)
+-    AC_MSG_RESULT(skipping)
+-else
+-    AC_MSG_CHECKING(for libjpeg-turbo in -> [${JPEG_TURBO}] <-)
+-    if test -f ${JPEG_TURBO}/lib/libjpeg.a ; then
+-        AC_MSG_RESULT(found)
+-        JPEG_TURBO_OK="found"
+-    else
+-        AC_MSG_RESULT(not found)
+-    fi
+-fi
+-
+-
+-if test "${JPEG_TURBO_OK}" = "found"; then
+-    saved_CFLAGS="$CFLAGS"
+-    saved_LIBS="$LIBS"
+-    saved_LDFLAGS="$LDFLAGS"
+-    LDFLAGS="-L${JPEG_TURBO}/lib"
+-    CFLAGS="$CFLAGS -I${JPEG_TURBO}/include"
+-    LIBS="$LIBS -L${JPEG_TURBO}/lib -ljpeg"
+-    AC_CHECK_LIB(jpeg, jpeg_start_compress,
+-        [ TEMP_LIBS="$LIBS"
+-          TEMP_CFLAGS="${CFLAGS}"
+-          TEMP_LDFLAGS="$TEMP_LDFLAGS $LDFLAGS"
+-          JPEG_SUPPORT="yes"],,)
+-    LIBS="$saved_LIBS"
+-    CFLAGS="$saved_CFLAGS"
+-    LDFLAGS="$saved_LDFLAGS"
+-    JPEG_SUPPORT_TURBO="yes"
+-fi
+-
+-
+-#
+-# Check for the special mmx accelerated jpeg library
+-#
+-JPEG_MMX="no"
+-JPEG_MMX_OK="not_found"
+-AC_ARG_WITH(jpeg-mmx,
+-[  --with-jpeg-mmx[=DIR]     Specify the prefix for the install path for
+-                          jpeg-mmx for optimized jpeg handling (optional).
+-                          If this is not specified motion will try to find
+-                          the library /usr/lib/libjpeg-mmx.a /usr/local/lib/libjpeg-mmx.a.
+-                          ],
+-JPEG_MMX="$withval"
+-)
+-
+-#
+-# --without-jpeg-mmx or with-jpeg-mmx=no
+-#
+-
+-if test "${JPEG_MMX}" = "no" || test x$JPEG_SUPPORT != xyes; then
+-        AC_MSG_CHECKING(for libjpeg-mmx)
+-        AC_MSG_RESULT(skipping)
+-elif test "${JPEG_MMX}" = "yes"; then
+-	# AUTODETECT STATIC LIB
+-	AC_MSG_CHECKING(for libjpeg-mmx autodetecting)
+-	
+-	if test -f /usr/lib/libjpeg-mmx.a ; then
+-		AC_MSG_RESULT(found)
+-		JPEG_MMX_OK="found"
+-		JPEG_MMX="/usr/lib"
+-	elif test -f /usr/local/lib/libjpeg-mmx.a ; then
+-		AC_MSG_RESULT(found)
+-		JPEG_MMX_OK="found"
+-		JPEG_MMX="/usr/local/lib"
+-	else
+-		AC_MSG_RESULT(not found)
+-	fi
+-else	
+-	AC_MSG_CHECKING(for libjpeg-mmx in -> [${JPEG_MMX}] <-)	
+-	if test -f ${JPEG_MMX}/libjpeg-mmx.a ; then
+-		AC_MSG_RESULT(found)
+-		JPEG_MMX_OK="found"
+-	else
+-		AC_MSG_RESULT(not found)
+-	fi
+-fi
+-
+-if test "${JPEG_MMX_OK}" = "found"; then
+-	saved_CFLAGS="$CFLAGS"
+-	saved_LIBS="$LIBS"
+-	CFLAGS="$CFLAGS -I${JPEG_MMX}"
+-	LIBS="$LIBS -L${JPEG_MMX}"
+-	AC_CHECK_LIB(jpeg-mmx, jpeg_start_compress,
+-		[ TEMP_LIBS="$TEMP_LIBS -ljpeg-mmx"
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -I${JPEG_MMX}"
+-		JPEG_SUPPORT="yes"],,)
+-	LIBS="$saved_LIBS"
+-	CFLAGS="$saved_CFLAGS"
+-	JPEG_SUPPORT_MMX="yes"
+-fi
+-
+-#
+-# Look for _a_ jpeg lib that will work.
+-#
+-if test x$JPEG_SUPPORT != xyes ; then
+-  # Checks for libraries
+-  LDFLAGS=$TEMP_LDFLAGS
+-
+-  AC_CHECK_LIB(jpeg, jpeg_set_defaults, [
+-		TEMP_LIBS="$TEMP_LIBS -ljpeg"
+-		JPEG_SUPPORT="yes"
+-	], [
+-		echo
+-		echo "You do not have libjpeg installed"
+-		echo
+-	]
+-  )
+-fi
+-
+-
+-#
+-# Check for libavcodec and libavformat from ffmpeg
+-#
+-FFMPEG_DIR="yes"
+-FFMPEG_OK="no_found"
+-FFMPEG_OBJ=""
+-AC_ARG_WITH(ffmpeg,
+-[  --with-ffmpeg[=DIR]       Specify the prefix for the install path for
+-                          libavcodec/libavformat (part of ffmpeg) be able to 
+-                          encode mpeg movies realtime.
+-                          If this is not specified motion will try to find
+-                          the libraries in /usr and /usr/local.
+-                          ],
+-FFMPEG_DIR="$withval"
+-)
+-
+-# 
+-# ffmpeg headers custom location
+-#
+-FFMPEG_HEADERS_DIR="yes"
+-AC_ARG_WITH(ffmpeg_headers,
+-[  --with-ffmpeg-headers[=DIR] Specify the prefix for ffmpeg headers.
+-                               ],
+-FFMPEG_HEADERS_DIR="$withval"
+-)
+-
+-#
+-# --without-ffmpeg or with-ffmpeg=no
+-#
+-if test "${FFMPEG_DIR}" = "no"; then
+-	AC_MSG_CHECKING(for ffmpeg)
+-	AC_MSG_RESULT(skipping)
+-#
+-# with-ffmpeg=<dir> or nothing
+-#
+-else if test "${FFMPEG_DIR}" = "yes"; then
+-	# AUTODETECT STATIC/SHARED LIB 
+-	AC_MSG_CHECKING(for ffmpeg autodetecting libraries)
+-
+-	if test -f /usr/lib64/libavcodec.a -o -f /usr/lib64/libavcodec.so && test -f /usr/lib64/libavformat.a -o -f /usr/lib64/libavformat.so ; then
+-		AC_MSG_RESULT(found in /usr/lib64)
+-		FFMPEG_OK="found"
+-		FFMPEG_LIB="/usr/lib64"
+-		FFMPEG_DIR="/usr"
+-	elif test -f /usr/lib/libavcodec.a -o -f /usr/lib/libavcodec.so && test -f /usr/lib/libavformat.a -o -f /usr/lib/libavformat.so ; then
+-		AC_MSG_RESULT(found in /usr/lib)
+-		FFMPEG_OK="found"
+-		FFMPEG_LIB="/usr/lib"
+-		FFMPEG_DIR="/usr"
+-	elif test -f /usr/local/lib/libavcodec.a -o -f /usr/local/lib/libavcodec.so && test -f /usr/local/lib/libavformat.a -o -f /usr/local/lib/libavformat.so ; then
+-		AC_MSG_RESULT(found in /usr/local/lib)
+-		FFMPEG_OK="found"
+-		FFMPEG_LIB="/usr/local/lib"
+-		FFMPEG_DIR="/usr/local"
+-    elif test -f /usr/lib/x86_64-linux-gnu/libavcodec.a -o -f /usr/lib/x86_64-linux-gnu/libavcodec.so && test /usr/lib/x86_64-linux-gnu/libavformat.a -o -f /usr/lib/x86_64-linux-gnu/libavformat.so ; then
+-        AC_MSG_RESULT(found in /usr/lib/x86_64-linux-gnu)
+-        FFMPEG_OK="found"
+-        FFMPEG_LIB="/usr/lib/x86_64-linux-gnu"
+-        FFMPEG_DIR="/usr"
+-	else
+-		AC_MSG_RESULT(not found)
+-		echo ""
+-		echo "**********************************************"
+-		echo "* libavcodec.a or libavcodec.so or           *"
+-		echo "* libavformat.a or libavformat.so not found: *"
+-		echo "*    ALL FFMPEG FEATURES DISABLED            *"
+-		echo "*                                            *"
+-		echo "* Please read the Motion Guide for help:     *"
+-		echo "* http://motion.sourceforge.net              *"
+-		echo "**********************************************"
+-		echo ""		
+-	fi 
+-else
+-	AC_MSG_CHECKING(for ffmpeg libraries in -> [${FFMPEG_DIR}] <-)
+-	if test -f ${FFMPEG_DIR}/lib/libavcodec.a -o -f ${FFMPEG_DIR}/lib/libavcodec.so && test -f ${FFMPEG_DIR}/lib/libavformat.a -o -f ${FFMPEG_DIR}/lib/libavformat.so ; then
+-		AC_MSG_RESULT(found)
+-		FFMPEG_OK="found"
+-		FFMPEG_LIB="${FFMPEG_DIR}/lib"
+-	elif test -f ${FFMPEG_DIR}/libavcodec.a -o -f ${FFMPEG_DIR}/libavcodec.so && test -f ${FFMPEG_DIR}/libavformat.a -o -f ${FFMPEG_DIR}/libavformat.so ; then
+-		AC_MSG_RESULT(found)
+-		FFMPEG_LIB="${FFMPEG_DIR}"
+-		FFMPEG_OK="found"
+-	else
+-		AC_MSG_RESULT(not found)
+-		if test "${FFMPEG_OK}" != "found"; then
+-			echo ""
+-			echo "**********************************************"
+-			echo "* libavcodec.a or libavcodec.so or           *"
+-			echo "* libavformat.a or libavformat.so not found: *"
+-			echo "*    ALL FFMPEG FEATURES DISABLED            *"
+-			echo "*                                            *"
+-			echo "* Please read the Motion Guide for help:     *"
+-			echo "* http://motion.sourceforge.net              *"
+-			echo "**********************************************"
+-			echo ""
+-		fi
+-	fi
+-fi
+-
+-#
+-# Now check for ffmpeg headers ( avformat.h ) if ffmpeg libs were found
+-#
+-
+-if test "${FFMPEG_OK}" = "found"; then
+-    if test "${FFMPEG_HEADERS_DIR}" = "yes"; then
+-        AC_MSG_CHECKING(for ffmpeg headers in ${FFMPEG_DIR})
+-	else
+-        AC_MSG_CHECKING(for ffmpeg headers in ${FFMPEG_HEADERS_DIR})
+-        FFMPEG_DIR="${FFMPEG_HEADERS_DIR}"
+-    fi
+-
+-    if test -f ${FFMPEG_DIR}/include/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include"
+-    elif test -f ${FFMPEG_DIR}/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}"
+-    elif test -f ${FFMPEG_DIR}/include/ffmpeg/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/ffmpeg/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg"
+-    elif test -f ${FFMPEG_DIR}/include/libavformat/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/libavformat/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/libavformat" 
+-    elif test -f ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/include/ffmpeg/libavformat/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR}/include/ffmpeg -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I${FFMPEG_DIR}/include/ffmpeg/libavformat" 
+-    elif test -f ${FFMPEG_DIR}/libavformat/avformat.h; then
+-        AC_MSG_RESULT(found ${FFMPEG_DIR}/libavformat/avformat.h)
+-        FFMPEG_CFLAGS="-I${FFMPEG_DIR} -DFFMPEG_NEW_INCLUDES"
+-        AVFORMAT="-I{FFMPEG_DIR}/libavformat"
+-    else
+-        AC_MSG_RESULT(not found)
+-        FFMPEG_OK="no_found"
+-        echo "**********************************************"
+-        echo "*       avformat.h not found:                *"
+-        echo "*    ALL FFMPEG FEATURES DISABLED            *"
+-        echo "*                                            *"
+-        echo "* Please read the Motion Guide for help:     *"
+-        echo "* http://motion.sourceforge.net              *"
+-        echo "**********************************************"
+-        echo ""
+-    fi
+-
+-#
+-# If ffmpeg libs and headers have been found 
+-#
+-
+-	if  test "${FFMPEG_OK}" = "found"; then	
+-        TEMP_LIBS="$TEMP_LIBS -L${FFMPEG_LIB} -lavformat -lavcodec -lavutil -lm -lz"
+-        TEMP_LDFLAGS="${TEMP_LDFLAGS} -L${FFMPEG_LIB}"
+-        TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG ${FFMPEG_CFLAGS}"
+-
+-        FFMPEG_OBJ="ffmpeg.o"
+-        AC_SUBST(FFMPEG_OBJ)
+-
+-        RTPS_OBJ="netcam_rtsp.o"
+-        AC_SUBST(RTPS_OBJ)
+-
+-        AC_MSG_CHECKING([file_protocol is defined in ffmpeg ?])
+-        saved_CFLAGS=$CFLAGS
+-        saved_LIBS=$LIBS
+-
+-
+-		CFLAGS="${FFMPEG_CFLAGS} ${AVFORMAT}"
+-		LIBS="$TEMP_LIBS"
+-    	
+-	    AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+-		    [
+-		     #include <avformat.h>
+-		     URLProtocol test_file_protocol;
+-		     int main(void){
+-		         test_file_protocol.url_read  = file_protocol.url_read;
+-		         return 0;
+-		     }
+-		     ]])],
+-		     [AC_MSG_RESULT(yes)],
+-		     [
+-			     AC_MSG_RESULT(no)
+-			     TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_FFMPEG_NEW"
+-		     ]
+-	    )
+-		CFLAGS=$saved_CFLAGS
+-		LIBS=$saved_LIBS
+-	fi
+-fi	
+-fi
+-
+-
+-#
+-# Check SQLITE3
+-#
+-
+-SQLITE3_SUPPORT="no"
+-AC_ARG_WITH(sqlite3,
+-    [  --without-sqlite3       Disable sqlite3 support in motion.
+-    ],
+-    SQLITE3="$withval"
+-    # if not given argument, assume standard
+-)
+-
+-if test "${SQLITE3}" = "no"; then
+-    AC_MSG_CHECKING(for sqlite3)
+-    AC_MSG_RESULT(skipping)
+-else
+-    saved_CFLAGS=$CFLAGS
+-    saved_LIBS=$LIBS
+-
+-    AC_CHECK_LIB(sqlite3, sqlite3_open,
+-    [
+-    TEMP_LIBS="$TEMP_LIBS -lsqlite3"
+-    SQLITE3_SUPPORT="yes"
+-    AC_DEFINE([HAVE_SQLITE3],1,[Define to 1 if you have SQLITE3 support])
+-    ]
+-    )
+-
+-    CFLAGS=$saved_CFLAGS
+-    LIBS=$saved_LIBS
+-fi    
+-
+-
+-#
+-# Check Mysql
+-#
+-
+-MYSQL="yes"
+-MYSQL_SUPPORT="no"
+-MYSQL_HEADERS="yes"
+-MYSQL_LIBS="yes"
+-
+-AC_MSG_CHECKING(for mysql support)
+-
+-AC_ARG_WITH(mysql,
+-[  --without-mysql         Disable mysql support in motion.
+-                          ],
+-MYSQL="$withval"
+-# if not given argument, assume standard
+-)
+-
+-AC_ARG_WITH(mysql-lib,
+-[  --with-mysql-lib[=DIR]        Normally, configure will scan all possible default
+-                          installation paths for mysql libs. When it fails, use
+-                          this command to tell configure where mysql libs
+-                          installation root directory is.
+-                          ],
+-MYSQL_LIBS="$withval"
+-# if not given argument, assume standard
+-)
+-
+-
+-AC_ARG_WITH(mysql-include,
+-[  --with-mysql-include[=DIR]    Normally, configure will scan all possible default
+-                          installation paths for mysql include. When it fails, use
+-                          this command to tell configure where mysql include
+-                          installation root directory is.
+-                          ],
+-MYSQL_HEADERS="$withval"
+-# if not given argument, assume standard
+-)
+-
+-
+-if test "${MYSQL}" = "no"; then
+-	AC_MSG_RESULT(skipped)
+-else
+-	AC_MSG_RESULT(testing)
+-	# ******* Search mysql headers *******
+-
+-	if test "${MYSQL_HEADERS}" = "yes"; then
+-		AC_MSG_CHECKING(autodect mysql headers)
+-		# Autodetect
+-		for w in /usr/include /usr/local/include /usr/mysql /usr/local/mysql /usr/local/mysql/include /opt /opt/mysql; do
+-			# check for plain setups
+-			if test -f $w/mysql.h; then
+-				MYSQL_INCDIR=$w
+-				break
+-			fi
+-			# check for "/usr/include/<packagename>" type setups
+-			if test -f $w/mysql/mysql.h; then
+-				MYSQL_INCDIR=$w/mysql
+-				break
+-			fi
+-			# check for "/usr/<packagename>/include" type setups
+-			if test -f $w/mysql/include/mysql.h; then
+-				MYSQL_INCDIR=$w/mysql/include
+-				break
+-			fi
+-		done
+-	elif test "${MYSQL_HEADERS}" = "no"; then
+-		AC_MSG_CHECKING(for mysql headers)	
+-		AC_MSG_RESULT(skipped)
+-	else
+-		AC_MSG_CHECKING(for mysql headers in $MYSQL_HEADERS)
+-		# Manual detection for <withval>
+-        	if test -f $MYSQL_HEADERS/mysql.h; then
+-                	MYSQL_INCDIR=$MYSQL_HEADERS
+-	        fi
+-	fi
+-
+-	if test -z "$MYSQL_INCDIR" ; then
+-		MYSQL_HEADERS="no"
+-		AC_MSG_RESULT(not found)
+-		echo "Invalid MySQL directory - unable to find mysql.h."
+-	else
+-		AC_MSG_RESULT($MYSQL_INCDIR yes)
+-		MYSQL_HEADERS="yes"
+-	fi
+-
+-
+-	if test "${MYSQL_HEADERS}" = "yes"; then
+-
+-	# ******* Search mysql libs *********
+-	if test "${MYSQL_LIBS}" = "yes"; then
+-		AC_MSG_CHECKING(autodect mysql libs)
+-        	# Autodetect
+-		for w in /usr/lib64 /usr/lib /usr/local/lib /usr/mysql /usr/local/mysql /usr/local/mysql/lib /opt /opt/mysql /usr/lib/x86_64-linux-gnu; do
+-			# check for plain setups
+-			if test -f $w/libmysqlclient.a -o -f $w/libmysqlclient.so; then
+-				MYSQL_LIBDIR=$w
+-				break
+-			fi
+-			# check for "/usr/lib/<packagename>" type setups
+-			if test -f $w/mysql/libmysqlclient.a -o -f $w/mysql/libmysqlclient.so; then
+-				MYSQL_LIBDIR=$w/mysql
+-				break
+-			fi
+-			# check for "/usr/<packagename>/lib" type setups
+-			if test -f $w/mysql/lib/libmysqlclient.a -o -f $w/mysql/lib/libmysqlclient.so; then
+-				MYSQL_LIBDIR=$w/mysql/lib
+-				break
+-			fi
+-		done
+-	elif test "${MYSQL_LIBS}" = "no"; then
+-        	AC_MSG_CHECKING(for mysql libs)
+-	        AC_MSG_RESULT(skipped)
+-	else
+-		AC_MSG_CHECKING(for mysql libs in $MYSQL_LIBS)
+-		# Manual detection for <withval>
+-		if test -f $MYSQL_LIBS/libmysqlclient.a -o -f $MYSQL_LIBS/libmysqlclient.so; then
+-			MYSQL_LIBDIR=$MYSQL_LIBS
+-		fi
+-	fi
+-
+-
+-	if test -z "$MYSQL_LIBDIR" ; then
+-		AC_MSG_RESULT(not found)
+-		echo "Invalid MySQL directory - unable to find libmysqlclient.a or libmysqlclient.so."
+-	else
+-		AC_MSG_RESULT($MYSQL_LIBDIR)
+-		#LDFLAGS="-L$MYSQL_LIBDIR"
+-		saved_CFLAGS=$CFLAGS
+-		saved_LIBS=$LIBS
+-		CFLAGS="-I$MYSQL_INCDIR"
+-		LIBS="-L$MYSQL_LIBDIR"
+-		AC_CHECK_LIB(mysqlclient,mysql_init,[	
+-					TEMP_LIBS="$TEMP_LIBS -L$MYSQL_LIBDIR -lmysqlclient -lz"
+-					TEMP_CFLAGS="$TEMP_CFLAGS -I$MYSQL_INCDIR"
+-					MYSQL_SUPPORT="yes"
+-					AC_DEFINE([HAVE_MYSQL],1,[Define to 1 if you have MySQL support])
+-					],
+-					AC_MSG_ERROR(MySQL support can't build without MySQL libraries))	
+-		CFLAGS=$saved_CFLAGS
+-		LIBS=$saved_LIBS
+-	fi
+-
+-	# end mysql-include , mysql-libs
+-	fi
+-
+-# end Mysql detection
+-fi
+-
+-
+-#
+-# Check PostgreSQL
+-#
+-PGSQL="yes"
+-PGSQL_SUPPORT="no"
+-PGSQL_HEADERS="yes"
+-PGSQL_LIBS="yes"
+-
+-AC_DEFUN(PGSQL_INC_CHK,[if test -r $i$1/libpq-fe.h; then PGSQL_DIR=$i; PGSQL_INCDIR=$i$1])
+-
+-AC_ARG_WITH(pgsql,
+-[  --without-pgsql         Disable PostgreSQL support in motion.
+-                          ],
+-PGSQL="$withval"
+-# if not given argument, assume standard
+-)
+-
+-AC_ARG_WITH(pgsql-lib,
+-[  --with-pgsql-lib[=DIR]        Normally, configure will scan all possible default
+-                          installation paths for pgsql libs. When it fails, use
+-                          this command to tell configure where pgsql libs
+-                          installation root directory is.
+-                          ],
+-PGSQL_LIBS="$withval"
+-# if not given argument, assume standard
+-)
+-
+-AC_ARG_WITH(pgsql-include,
+-[  --with-pgsql-include[=DIR]    Normally, configure will scan all possible default
+-                          installation paths for pgsql include. When it fails, use
+-                          this command to tell configure where pgsql include
+-                          installation root directory is.
+-                          ],
+-PGSQL_HEADERS="$withval"
+-# if not given argument, assume standard
+-)
+-
+-AC_MSG_CHECKING(for PostgreSQL)
+-
+-if test "${PGSQL}" = "no"; then
+-	AC_MSG_RESULT(skipped)
+-else
+-	AC_MSG_RESULT(testing)
+-
+-	# ******* Search pgsql headers *******
+-	if test "${PGSQL_HEADERS}" = "yes"; then
+-
+-		AC_MSG_CHECKING(autodect pgsql headers)
+-		# Autodetect
+-		for i in /usr /usr/local /usr/local/pgsql $PHP_PGSQL; do
+-			PGSQL_INC_CHK(/include)
+-			el[]PGSQL_INC_CHK(/include/pgsql)
+-			el[]PGSQL_INC_CHK(/include/postgresql)
+-			fi
+-		done
+-		
+-	elif test "${PGSQL_HEADERS}" = "no"; then
+-		AC_MSG_CHECKING(for pgsql headers)	
+-		AC_MSG_RESULT(skipped)
+-	else
+-		AC_MSG_CHECKING(for pgsql headers in $PGSQL_HEADERS)
+-		# Manual detection for <withval>
+-        	if test -f $PGSQL_HEADERS/libpq-fe.h; then
+-                	PGSQL_INCDIR=$PGSQL_HEADERS
+-	        fi
+-	fi
+-
+-	if test -z "$PGSQL_INCDIR" ; then
+-		PGSQL_HEADERS="no"
+-		AC_MSG_RESULT(not found)
+-		echo "Invalid PostgreSQL directory - unable to find libpq-fe.h."
+-	else
+-		AC_MSG_RESULT(yes [$PGSQL_INCDIR])
+-		PGSQL_HEADERS="yes"
+-	fi
+-
+-
+-	if test "${PGSQL_HEADERS}" = "yes"; then
+-
+-		# ******* Search pgsql libs *********
+-		if test "${PGSQL_LIBS}" = "yes"; then
+-			AC_MSG_CHECKING(autodect pgsql libs)
+-			# Autodetect
+-			PGSQL_INCLUDE="-I$PGSQL_INCDIR"
+-			PGSQL_LIBDIR=$PGSQL_DIR/lib
+-
+-			if test -f /usr/lib64/libpq.so ; then
+-				PGSQL_LIBDIR=/usr/lib64
+-			elif test -f $PGSQL_DIR/lib/pgsql/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib/pgsql 
+-			elif test -f $PGSQL_DIR/lib/postgresql/libpq.so ; then
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib/postgresql
+-			elif test -f $PGSQL_DIR/lib/libpq.so ; then	
+-				PGSQL_LIBDIR=$PGSQL_DIR/lib
+-			else
+-				PGSQL_LIBDIR=""
+-			fi
+-
+-			AC_MSG_RESULT($PGSQL_LIBDIR)
+-
+-		elif test "${PGSQL_LIBS}" = "no"; then
+-	        	AC_MSG_CHECKING(for pgsql libs)
+-		        AC_MSG_RESULT(skipped)
+-		else
+-			AC_MSG_CHECKING(for pgsql libs in $PGSQL_LIBS)
+-			# Manual detection for <withval>
+-			if test -f $PGSQL_LIBS/libpq.a -o -f $PGSQL_LIBS/libpq.so; then
+-				PGSQL_LIBDIR=$PGSQL_LIBS
+-			fi
+-		fi
+-
+-
+-		if test -z "$PGSQL_LIBDIR" ; then
+-			AC_MSG_RESULT(not found)
+-			echo "Invalid PostgreSQL directory [$PGSQL_LIBDIR] - unable to find libpq.a or libpq.so."
+-		else
+-			#LDFLAGS="$TEMP_LDFLAGS -L$PGSQL_LIBDIR"
+-			saved_CFLAGS=$CFLAGS
+-			saved_LIBS=$LIBS
+-			CFLAGS="-I$PGSQL_INCDIR"
+-			LIBS="-L$PGSQL_LIBDIR"
+-			AC_CHECK_LIB(pq, PQconnectStart, [
+-						PGSQL_SUPPORT="yes"
+-						TEMP_LIBS="$TEMP_LIBS -L$PGSQL_LIBDIR -lpq"
+-						TEMP_CFLAGS="$TEMP_CFLAGS -I$PGSQL_INCDIR"
+-						AC_DEFINE([HAVE_PGSQL],1,[Define to 1 if you have PostgreSQL support])
+-					], 
+-			AC_MSG_ERROR(PostgreSQL support can't build without PostgreSQL libraries))
+-			LDFLAGS=""	
+-			CFLAGS=$saved_CFLAGS
+-			LIBS=$saved_LIBS
+-		fi
+-		
+-	fi # end pgsql-include , pgsql-libs
+-
+-# end PostgreSQL detection
+-fi
+-
+-
+-#Checks for header files.
+-AC_HEADER_STDC
+-AC_CHECK_HEADERS(stdio.h unistd.h stdint.h fcntl.h time.h signal.h sys/ioctl.h sys/mman.h linux/videodev.h linux/videodev2.h sys/param.h sys/types.h)
+-
+-AC_CHECK_FUNCS(get_current_dir_name)
+-
+-# Check if v4l2 is available
+-SUPPORTED_V4L2=false
+-SUPPORTED_V4L2_old=false
+-
+-if test "${V4L}" = "no"; then
+-	AC_MSG_CHECKING(for V42L support)
+-	AC_MSG_RESULT(skipping)
+-else
+-	AC_CHECK_TYPE([struct v4l2_buffer], 
+-        	      [SUPPORTED_V4L2=true],
+-             	 [SUPPORTED_V4L2=false],
+-	       	 [#include <sys/time.h>
+-			#include <linux/videodev.h>])
+-
+-	AC_MSG_CHECKING(for V42L support)
+-	if test x$SUPPORTED_V4L2 = xtrue; then
+-		AC_MSG_RESULT(yes)
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -DMOTION_V4L2"
+-	else	
+-		AC_MSG_RESULT(no)
+-	fi
+-
+-	# linux/videodev.h doesn't include videodev2.h
+-	if test x$SUPPORTED_V4L2 = xfalse; then
+-		AC_MSG_CHECKING(for V42L *old* support)
+-		AC_MSG_RESULT(testing)
+-		AC_CHECK_HEADERS(linux/videodev2.h,[SUPPORTED_V4L2_old=true],[], [#include <asm/types.h>])
+-	fi
+-
+-
+-	if test x$SUPPORTED_V4L2_old = xtrue; then
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -DMOTION_V4L2 -DMOTION_V4L2_OLD"
+-		SUPPORTED_V4L2=true
+-	fi
+-
+-fi
+-
+-
+-# Check sizes of integer types
+-AC_CHECK_SIZEOF(short)
+-AC_CHECK_SIZEOF(int)
+-AC_CHECK_SIZEOF(long int)
+-AC_CHECK_SIZEOF(long long)
+-AC_CHECK_SIZEOF(int *)
+-AC_CHECK_SIZEOF(void *)
+-
+-if test "$ac_cv_sizeof_short" = "4"; then
+-	TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"short\""
+-else
+-	if test "$ac_cv_sizeof_int" = "4"; then
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"int\""
+-	else
+-		if test "$ac_cv_sizeof_long_int" = "4"; then
+-			TEMP_CFLAGS="${TEMP_CFLAGS} -DTYPE_32BIT=\"long int\""
+-		fi
+-	fi
+-fi
+-
+-
+-OPTIMIZECPU="yes"
+-
+-AC_ARG_WITH(optimizecpu,
+-[  --without-optimizecpu   Exclude autodetecting platform and cpu type.
+-                          This will disable the compilation of gcc
+-                          optimizing code by platform and cpu.
+-			  ],
+-OPTIMIZECPU="$withval"
+-)
+-
+-DEVELOPER_FLAGS="no"
+-
+-AC_ARG_WITH(developer-flags,
+-[  --with-developer-flags  Causes practically all of the possible gcc
+-                          warning flags to be set.  This may produce
+-                          a large amount of warnings.],
+-DEVELOPER_FLAGS="$withval"
+-)
+-
+-# Checks for typedefs, structures, and compiler characteristics.
+-AC_C_CONST
+-
+-if test "${FreeBSD}" != ""; then
+-	OPTIMIZECPU=""
+-fi
+-
+-if test "${OPTIMIZECPU}" = "yes"; then
+-
+-# Try to autodetect cpu type
+-CPU_NAME="unknown"
+-CPU_TYPE="unknown"
+-if test -e "/proc/cpuinfo" ; then
+-	intel[[30]]="-march=i386"
+-	intel[[32]]="-march=i386"
+-	intel[[34]]="-march=i386"
+-	intel[[40]]="-march=i486"
+-	intel[[41]]="-march=i486"
+-	intel[[42]]="-march=i486"
+-	intel[[43]]="-march=i486"
+-	intel[[44]]="-march=i486"
+-	intel[[45]]="-march=i486"
+-	intel[[47]]="-march=i486"
+-	intel[[48]]="-march=i486"
+-	intel[[51]]="-march=pentium"
+-	intel[[52]]="-march=pentium"
+-	intel[[54]]="-march=pentium-mmx"
+-	intel[[56]]="-march=pentium-mmx"
+-	intel[[61]]="-march=pentiumpro"
+-	intel[[63]]="-march=pentium2"
+-	intel[[65]]="-march=pentium2"
+-	intel[[66]]="-march=pentium2"
+-	intel[[67]]="-march=pentium3"
+-	intel[[68]]="-march=pentium3"
+-	intel[[610]]="-march=pentium3"
+-	intel[[611]]="-march=pentium3"
+-	intel[[150]]="-march=pentium4"
+-	intel[[151]]="-march=pentium4"
+-	intel[[152]]="-march=pentium4"
+-	intel[[154]]="-march=pentium4"
+-	intel[[614]]="-march=prescott"
+-	intel[[628]]="-march=core2"
+-	amd[[50]]="-march=i586"
+-	amd[[51]]="-march=i586"
+-	amd[[52]]="-march=i586"
+-	amd[[53]]="-march=i586"
+-	amd[[56]]="-march=k6"
+-	amd[[57]]="-march=k6"
+-	amd[[58]]="-march=k6-2"
+-	amd[[510]]="-march=k6-2"
+-	amd[[59]]="-march=k6-3"
+-	amd[[513]]="-march=k6-3"
+-	amd[[61]]="-march=athlon"
+-	amd[[62]]="-march=athlon"
+-	amd[[63]]="-march=athlon"
+-	amd[[64]]="-march=athlon"
+-	amd[[66]]="-march=athlon"
+-	amd[[67]]="-march=athlon"
+-	amd[[68]]="-march=athlon"
+-	amd[[610]]="-march=athlon"
+-	amd[[158]]="-march=athlon-xp"
+-	amd[[154]]="-march=k8"
+-	amd[[155]]="-march=athlon64"
+-	amd[[1543]]="-march=athlon64"
+-	amd[[1544]]="-march=athlon64"
+-	amd[[1565]]="-march=opteron"
+-	amd[[1572]]="-march=k8" 
+-	via[[67]]="-march=c3"
+-	via[[68]]="-march=c3"
+-	via[[69]]="-march=i686" 
+-	via[[610]]="-march=i686"
+-	
+-	CPU_TYPE="known"
+-	CPU_FAMILY=`cat /proc/cpuinfo | grep "cpu family" | head -n1`
+-	CPU_MODEL=`cat /proc/cpuinfo | grep model[[^\ ]] | head -n1`
+-	CPU_NAME=`cat /proc/cpuinfo | grep "model name" | head -n1`
+-	CPU_FLAGS=`cat /proc/cpuinfo | grep "flags" | head -n1`
+-	CPU_VENDOR=`cat /proc/cpuinfo | grep "vendor_id" | head -n1`
+-	CPU_FAMILY=${CPU_FAMILY#*: }
+-	CPU_MODEL=${CPU_MODEL#*: }
+-	CPU_NAME=${CPU_NAME#*: }
+-	CPU_FLAGS=${CPU_FLAGS#*: }
+-	CPU_VENDOR=${CPU_VENDOR#*: }
+-	if test "x${CPU_VENDOR}" = "xGenuineIntel" ; then
+-		CPU_OPTIONS=${intel[[$CPU_FAMILY$CPU_MODEL]]}
+-	fi
+-	if test "x${CPU_VENDOR}" = "xAuthenticAMD" ; then
+-		CPU_OPTIONS=${amd[[$CPU_FAMILY$CPU_MODEL]]}
+-	fi
+-	if test "x${CPU_VENDOR}" = "xCentaurHauls"; then
+-		CPU_OPTIONS=${via[[$CPU_FAMILY$CPU_MODEL]]}
+-	fi
+-	if test "x${CPU_OPTIONS}" = "x" ; then
+-		CPU_TYPE="unknown"
+-	fi
+-	CPU_EXT=""
+-	for i in $CPU_FLAGS ; do
+-		case $i in
+-		fpu)
+-			CPU_FPU="-mfpmath=387"
+-			;;
+-		mmx)
+-			CPU_EXT="$CPU_EXT -mmmx"
+-			;;
+-		sse)
+-			CPU_FPU="-mfpmath=sse -msse"
+-			;;
+-		sse2)
+-			CPU_FPU="-mfpmath=sse -msse2"
+-			;;
+-		sse3)
+-			CPU_FPU="-msse3"
+-			;;
+-		ssse3)
+-			CPU_FPU="-mfpmath=sse -msse2 -mssse3"
+-			;;
+-		3dnow)
+-			CPU_EXT="$CPU_EXT -m3dnow"
+-			;;
+-		esac
+-	done
+-	CPU_OPTIONS="$CPU_OPTIONS $CPU_FPU $CPU_EXT"
+-fi
+-if test "x${CPU_TYPE}" = "xunknown"; then
+-	CPU_TYPE=`( uname -p ) 2>&1`
+-	case $CPU_TYPE in
+-	i386)
+-		CPU_OPTIONS="-march=i386"
+-		;;
+-	i486)
+-		CPU_OPTIONS="-march=i486"
+-		;;
+-	Pentium2)
+-		CPU_OPTIONS="-march=pentium2"
+-		;;
+-	Pentiumpro)
+-		CPU_OPTIONS="-march=pentiumpro"
+-		;;
+-	Pentium*)
+-		CPU_OPTIONS="-march=pentium"
+-		;;
+-	k6)
+-		CPU_OPTIONS="-march=k6"
+-		;;
+-	k6-2)
+-		CPU_OPTIONS="-march=k6-2"
+-		;;
+-	k6-3)
+-		CPU_OPTIONS="-march=k6-3"
+-		;;
+-	"VIA C3 Ezra")
+-		CPU_OPTIONS="-march=c3"
+-		CPU_TYPE="known"
+-               ;;
+-	*)
+-		CPU_OPTIONS=""
+-		CPU_TYPE="unknown"
+-		;;
+-	esac
+-	if test "x${CPU_TYPE}" = "xunknown"; then
+-		CPU_TYPE=`( uname -m ) 2>&1`
+-		case $CPU_TYPE in
+-		i386)
+-			CPU_OPTIONS="-march=i386"
+-			;;
+-		i486)
+-			CPU_OPTIONS="-march=i486"
+-			;;
+-		i586)
+-			CPU_OPTIONS="-march=i586"
+-			;;
+-		i686)
+-			CPU_OPTIONS="-march=i686"
+-			;;
+-		Pentium2)
+-			CPU_OPTIONS="-march=pentium2"
+-			;;
+-		Pentiumpro)
+-			CPU_OPTIONS="-march=pentiumpro"
+-			;;
+-		k6)
+-			CPU_OPTIONS="-march=k6"
+-			;;
+-		k6-2)
+-			CPU_OPTIONS="-march=k6-2"
+-			;;
+-		k6-3)
+-			CPU_OPTIONS="-march=k6-3"
+-			;;
+-		*)
+-			CPU_OPTIONS="-march=native -mtune=native"
+-			;;
+-		esac
+-	fi
+-fi
+-echo "Detected CPU: $CPU_NAME"
+-# Now we check if the compiler supports the detected cpu
+-COMPILER=$CC
+-for I in "$TMPDIR" "$TEMPDIR" "/tmp" ; do
+-	test "$I" && break
+-done
+-TMPC="$I/cpu_test-$RANDOM-$$.c"
+-TMPO="$I/cpu_test-$RANDOM-$$.o"
+-cat > $TMPC << EOF
+-int main(void) { return 0; }
+-EOF
+-( $COMPILER $CPU_OPTIONS -o $TMPO $TMPC ) 2>&1
+-TMP="$?"
+-rm -f $TMPO
+-rm -f $TMPC
+-
+-
+-if test "x${TMP}" = "x1" ; then
+-	CPU_OPTIONS=""
+-	echo "No CPU optimizations will be added"
+-else
+-	echo "CPU optimization: $CPU_OPTIONS"
+-fi
+-
+-else
+-	CPU_OPTIONS=""
+-fi
+-
+-
+-AC_MSG_CHECKING(for bswap instruction)
+-AC_LINK_IFELSE([
+-	AC_LANG_PROGRAM([ ],
+-		[unsigned int __x=0;
+-		register unsigned int __v;
+-		__asm("bswap %0" : "=r" (__v) : "0" (__x));])
+-	],
+-	[
+-		TEMP_CFLAGS="${TEMP_CFLAGS} -DHAVE_BSWAP"
+-		AC_MSG_RESULT(yes)
+-	],
+-	[ 
+-		AC_MSG_RESULT(no)
+-	])
+-
+-
+-if test "${DEVELOPER_FLAGS}" = "yes"; then
+-	TEMP_CFLAGS="${TEMP_CFLAGS} -W -Wshadow -Wpointer-arith -Wcast-align -Wwrite-strings -Waggregate-return -Wstrict-prototypes -Wmissing-prototypes -Wnested-externs -Winline -Wredundant-decls -Wno-long-long -ggdb -g3"
+-fi
+-
+-CFLAGS="${TEMP_CFLAGS} $UNAME_DEFS  $CPU_OPTIONS"
+-
+-LIBS="${TEMP_LIBS}"
+-LDFLAGS="${TEMP_LDFLAGS}"
+-
+-
+-AC_CHECK_FUNC(avformat_alloc_context, AC_DEFINE([have_avformat_alloc_context],1,[Define to 1 if you have avformat_alloc_context support]))
+-AC_CHECK_FUNC(av_avformat_alloc_context, AC_DEFINE([have_av_avformat_alloc_context],1,[Define to 1 if you have av_avformat_alloc_context support]))
+-AC_CHECK_FUNC(av_register_protocol2, AC_DEFINE([have_av_register_protocol2],1,[Define to 1 if you have av_register_protocol2 support]))
+-AC_CHECK_FUNC(av_register_protocol, AC_DEFINE([have_av_register_protocol],1,[Define to 1 if you have av_register_protocol support]))
+-AC_CHECK_FUNC(av_get_media_type_string, AC_DEFINE([have_av_get_media_type_string],1,[Define to 1 if you have av_get_media_type_string support]))
+-
+-
+-#
+-# Add the right exec path for rc scripts
+-#
+-if test $prefix = "NONE";then
+-	BIN_PATH="$ac_default_prefix"
+-	if test $exec_prefix = "NONE"; then
+-		BIN_PATH="$BIN_PATH/bin"
+-	else
+-		BIN_PATH="$BIN_PATH/$bindir"
+-	fi
+-else
+-	if test $exec_prefix = "NONE";then
+-		BIN_PATH="$prefix/bin"
+-	else
+-		BIN_PATH="$prefix/$bindir"
+-	fi
+-fi
+-
+-
+-AC_SUBST(BIN_PATH)
+-
+-AC_CONFIG_FILES([
+-thread1.conf
+-thread2.conf
+-thread3.conf
+-thread4.conf
+-motion-dist.conf
+-motion.init-FreeBSD.sh
+-motion.init-Debian
+-motion.init-Fedora
+-motion.spec
+-Makefile
+-])
+-AC_OUTPUT
+-
+-echo ""
+-echo "   **************************"
+-echo "      Configure status       "
+-echo "      ${PACKAGE_NAME} ${PACKAGE_VERSION}"
+-echo "   **************************"
+-echo 
+-
+-
+-if test "${Darwin}" != ""; then
+-    echo "OS             :     Darwin"
+-elif test "${FreeBSD}" != ""; then
+-    echo "OS             :     *BSD"		
+-else 
+-    echo "OS             :     Linux"
+-fi
+-
+-if test "${PTHREAD_SUPPORT}" = "yes"; then
+-    echo "pthread support:     Yes"
+-else
+-    echo "pthread support:     No"
+-    echo "**********************************************"
+-    echo "** Fatal Error YOU MUST HAVE pthread Support *"
+-    echo "**********************************************" 
+-fi
+-
+-
+-if test "${JPEG_SUPPORT_TURBO}" = "yes"; then
+-    echo "jpeg turbo support:  Yes"
+-elif test "${JPEG_SUPPORT_MMX}" = "yes"; then
+-    echo "jpeg-mmx support:    Yes"
+-elif test "${JPEG_SUPPORT}" = "yes"; then
+-    echo "jpeg support:        Yes"
+-else
+-    echo "jpeg support:        No"
+-    echo "**********************************************"
+-    echo "** Fatal Error YOU MUST HAVE jpeg Support  ***"
+-    echo "**********************************************"
+-fi
+-
+-if test "${FreeBSD}" != ""; then
+-	if test "${BKTR}" = "yes"; then
+-        echo "BKTR included:       Yes"
+-	else
+-        echo "BKTR included:       No"
+-	fi
+-
+-	if test "${PWCBSD}" = "yes"; then
+-        echo "PWCBSD include:      Yes"
+-	else
+-        echo "PWCBSD include:      No"
+-	fi
+-
+-else
+-	if test "${V4L}" = "yes"; then
+-        echo "V4L support:         Yes"
+-	else
+-        echo "V4L support:         No"
+-	fi
+-
+-	if test x$SUPPORTED_V4L2 = xtrue; then
+-        echo "V4L2 support:        Yes"	
+-	else
+-        echo "V4L2 support:        No"
+-	fi
+-fi
+-
+-if test "${SDL_SUPPORT}" = "yes"; then
+-	echo "SDL support:         Yes"
+-else
+-	echo "SDL support:         No"
+-fi
+-
+-if test "${FFMPEG_OK}" = "found"; then
+-    echo "FFmpeg support:      Yes"
+-else
+-    echo "FFmpeg support:      No"
+-fi
+-
+-if test "${SQLITE3_SUPPORT}" = "yes"; then
+-    echo "SQLite3 support:     Yes"
+-else
+-    echo "SQLite3 support:     No"
+-fi
+-
+-if test "${MYSQL_SUPPORT}" = "yes"; then
+-    echo "MYSQL support:       Yes"
+-else
+-    echo "MYSQL support:       No"
+-fi
+-
+-if test "${PGSQL_SUPPORT}" = "yes"; then
+-    echo "PostgreSQL support:  Yes"
+-else
+-    echo "PostgreSQL support:  No"
+-fi
+-echo 
+-echo "CFLAGS: $CFLAGS"
+-echo "LIBS: $LIBS"
+-echo "LDFLAGS: $LDFLAGS"
+-echo
+-echo  "Install prefix:       $prefix"
+-echo
+-
+diff --git a/netcam.c b/netcam.c
+index 6faa08c..554da65 100644
+--- a/netcam.c
++++ b/netcam.c
+@@ -45,7 +45,7 @@
+ #include <sys/socket.h>
+ 
+ #include "netcam_ftp.h"
+-#ifdef have_av_get_media_type_string
++#ifdef FFMPEG_V55
+ #include "netcam_rtsp.h"
+ #endif
+ 
+@@ -149,21 +149,21 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+ {
+     char *s;
+     int i;
+-#ifdef have_av_get_media_type_string    
++#ifdef FFMPEG_V55
+     const char *re = "(http|ftp|mjpg|rtsp)://(((.*):(.*))@)?"
+                      "([^/:]|[-.a-z0-9]+)(:([0-9]+))?($|(/[^:]*))";
+ #else
+     const char *re = "(http|ftp|mjpg)://(((.*):(.*))@)?"
+                      "([^/:]|[-.a-z0-9]+)(:([0-9]+))?($|(/[^:]*))";
+-#endif                     
++#endif
+     regex_t pattbuf;
+     regmatch_t matches[10];
+ 
+-    if (!strncmp(text_url, "file", 4)) 
++    if (!strncmp(text_url, "file", 4))
+         re = "(file)://(((.*):(.*))@)?"
+              "([^/:]|[-.a-z0-9]*)(:([0-9]*))?($|(/[^:][/-_.a-z0-9]+))";
+ 
+-    MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Entry netcam_url_parse data %s", 
++    MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Entry netcam_url_parse data %s",
+                text_url);
+ 
+     memset(parse_url, 0, sizeof(struct url_t));
+@@ -211,10 +211,10 @@ static void netcam_url_parse(struct url_t *parse_url, const char *text_url)
+             parse_url->port = 80;
+         else if (!strcmp(parse_url->service, "ftp"))
+             parse_url->port = 21;
+-#ifdef have_av_get_media_type_string            
++#ifdef FFMPEG_V55
+         else if (!strcmp(parse_url->service, "rtsp") && parse_url->port == 0)
+             parse_url->port = 554;
+-#endif            
++#endif
+     }
+ 
+     regfree(&pattbuf);
+@@ -313,7 +313,7 @@ static long netcam_check_content_length(char *header)
+                        " Content-Length but value %ld", length);
+     }
+ 
+-    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Content-Length %ld", 
++    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Content-Length %ld",
+                length);
+ 
+     return length;
+@@ -341,7 +341,7 @@ static int netcam_check_keepalive(char *header)
+         return -1;
+ 
+     /* We do not detect the second field or other case mixes at present. */
+-    if (content_type) 
++    if (content_type)
+         free(content_type);
+ 
+     return 1;
+@@ -368,11 +368,11 @@ static int netcam_check_close(char *header)
+ 
+     if (!header_process(header, "Connection", http_process_type, &type))
+         return -1;
+-    
++
+     if (!strcmp(type, "close")) /* strcmp returns 0 for match. */
+         ret = 1;
+-    
+-    if (type) 
++
++    if (type)
+         free(type);
+ 
+     return ret;
+@@ -403,7 +403,7 @@ static int netcam_check_content_type(char *header)
+     if (!header_process(header, "Content-type", http_process_type, &content_type))
+         return -1;
+ 
+-    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Content-type %s", 
++    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Content-type %s",
+                content_type);
+ 
+     if (!strcmp(content_type, "image/jpeg")) {
+@@ -442,7 +442,7 @@ static int netcam_read_next_header(netcam_context_ptr netcam)
+     char *header;
+ 
+     /* Return if not connected */
+-    if (netcam->sock == -1) 
++    if (netcam->sock == -1)
+         return -1;
+     /*
+      * We are expecting a header which *must* contain a mime-type of
+@@ -465,12 +465,12 @@ static int netcam_read_next_header(netcam_context_ptr netcam)
+             if (retval != HG_OK) {
+                 /* Header reported as not-OK, check to see if it's null. */
+                 if (strlen(header) == 0) {
+-                    MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Error reading image header, " 
++                    MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Error reading image header, "
+                                "streaming mode (1). Null header.");
+                 } else {
+                     /* Header is not null. Output it in case it's a new camera with unknown headers. */
+                     MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Error reading image header, "
+-                               "streaming mode (1). Unknown header '%s'", 
++                               "streaming mode (1). Unknown header '%s'",
+                                header);
+                  }
+ 
+@@ -490,7 +490,7 @@ static int netcam_read_next_header(netcam_context_ptr netcam)
+         retval = header_get(netcam, &header, HG_NONE);
+ 
+         if (retval != HG_OK) {
+-            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error reading image header (2)"); 
++            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error reading image header (2)");
+             free(header);
+             return -1;
+         }
+@@ -512,16 +512,16 @@ static int netcam_read_next_header(netcam_context_ptr netcam)
+                 netcam->receiving->content_length = retval;
+             } else {
+                 netcam->receiving->content_length = 0;
+-                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Content-Length 0"); 
++                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Content-Length 0");
+                 free(header);
+                 return -1;
+-            }    
+-        }    
++            }
++        }
+ 
+         free(header);
+     }
+ 
+-    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Found image header record"); 
++    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Found image header record");
+ 
+     free(header);
+     return 0;
+@@ -592,11 +592,11 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+     while (1) {     /* 'Do forever' */
+         ret = header_get(netcam, &header, HG_NONE);
+ 
+-        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Received first header ('%s')", 
++        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Received first header ('%s')",
+                    header);
+ 
+         if (ret != HG_OK) {
+-            MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Error reading first header (%s)", 
++            MOTION_LOG(WRN, TYPE_NETCAM, NO_ERRNO, "%s: Error reading first header (%s)",
+                        header);
+             free(header);
+             return -1;
+@@ -609,15 +609,15 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+ 
+                 free(header);
+                 if (netcam->connect_keepalive) {
+-                    /* 
+-                     * Cannot unset netcam->cnt->conf.netcam_keepalive as it is assigned const 
+-                     * But we do unset the netcam keepalive flag which was set in netcam_start 
++                    /*
++                     * Cannot unset netcam->cnt->conf.netcam_keepalive as it is assigned const
++                     * But we do unset the netcam keepalive flag which was set in netcam_start
+                      * This message is logged as Information as it would be useful to know
+-                     * if your netcam often returns bad HTTP result codes. 
++                     * if your netcam often returns bad HTTP result codes.
+                      */
+                     netcam->connect_keepalive = FALSE;
+                     free((void *)netcam->cnt->conf.netcam_keepalive);
+-                    netcam->cnt->conf.netcam_keepalive = strdup("off"); 
++                    netcam->cnt->conf.netcam_keepalive = strdup("off");
+                     MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Removed netcam Keep-Alive flag"
+                                "due to apparent closed HTTP connection.");
+                 }
+@@ -643,18 +643,18 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+              */
+             switch (ret) {
+             case 1:         /* Not streaming */
+-                if (netcam->connect_keepalive) 
+-                    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Non-streaming camera " 
++                if (netcam->connect_keepalive)
++                    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Non-streaming camera "
+                                "(keep-alive set)");
+                 else
+-                    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Non-streaming camera " 
++                    MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Non-streaming camera "
+                                "(keep-alive not set)");
+ 
+                 netcam->caps.streaming = NCS_UNSUPPORTED;
+                 break;
+ 
+             case 2:         /* Streaming */
+-                MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Streaming camera"); 
++                MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Streaming camera");
+ 
+                 netcam->caps.streaming = NCS_MULTIPART;
+ 
+@@ -687,7 +687,7 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+                 MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Unrecognized content type");
+                 free(header);
+                 return -1;
+-                
++
+             }
+         } else if ((ret = (int) netcam_check_content_length(header)) >= 0) {
+             MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Content-length present");
+@@ -695,7 +695,7 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+             if (ret > 0) {
+                 netcam->caps.content_length = 1;     /* Set flag */
+                 netcam->receiving->content_length = ret;
+-            } else { 
++            } else {
+                 netcam->receiving->content_length = 0;
+                 MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Content-length 0");
+                 retval = -2;
+@@ -704,18 +704,18 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+             /* Note that we have received a Keep-Alive header, and thus the socket can be left open. */
+             aliveflag = TRUE;
+             netcam->keepalive_thisconn = TRUE;
+-            /* 
+-             * This flag will not be set when a Streaming cam is in use, but that 
+-             * does not matter as the test below looks at Streaming state also.   
++            /*
++             * This flag will not be set when a Streaming cam is in use, but that
++             * does not matter as the test below looks at Streaming state also.
+              */
+         } else if (netcam_check_close(header) == TRUE) {
+             /* Note that we have received a Connection: close header. */
+             closeflag = TRUE;
+-            /* 
+-             * This flag is acted upon below. 
+-             * Changed criterion and moved up from below to catch headers that cause returns. 
++            /*
++             * This flag is acted upon below.
++             * Changed criterion and moved up from below to catch headers that cause returns.
+              */
+-             MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Found Conn: close header ('%s')", 
++             MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: Found Conn: close header ('%s')",
+                         header);
+         }
+         free(header);
+@@ -723,7 +723,7 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+     free(header);
+ 
+     if (netcam->caps.streaming == NCS_UNSUPPORTED && netcam->connect_keepalive) {
+-        
++
+         /* If we are a non-streaming (ie. Jpeg) netcam and keepalive is configured. */
+ 
+         if (aliveflag) {
+@@ -738,22 +738,22 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+                     netcam->cnt->conf.netcam_keepalive = strdup("off");
+                 } else {
+                    /*
+-                    * If not a streaming cam, and keepalive is set, and the flag shows we 
++                    * If not a streaming cam, and keepalive is set, and the flag shows we
+                     * did not see a Keep-Alive field returned from netcam and a Close field.
+                     * Not quite sure what the correct course of action is here. In for testing.
+-                    */ 
++                    */
+                     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Both 'Connection: Keep-Alive' and "
+                                "'Connection: close' header received. Motion continues unchanged.");
+                 }
+             } else {
+-               /* 
+-                * aliveflag && !closeflag 
++               /*
++                * aliveflag && !closeflag
+                 *
+-                * If not a streaming cam, and keepalive is set, and the flag shows we 
++                * If not a streaming cam, and keepalive is set, and the flag shows we
+                 * just got a Keep-Alive field returned from netcam and no Close field.
+                 * No action, as this is the normal case. In debug we print a notification.
+                 */
+-        
++
+                 MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Received a Keep-Alive field in this"
+                            "set of headers.");
+             }
+@@ -770,17 +770,17 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+                     netcam->cnt->conf.netcam_keepalive = strdup("off");
+                 } else {
+                    /*
+-                    * If not a streaming cam, and keepalive is set, and the flag shows we 
++                    * If not a streaming cam, and keepalive is set, and the flag shows we
+                     * did not see a Keep-Alive field returned from netcam nor a Close field.
+                     * Not quite sure what the correct course of action is here. In for testing.
+-                    */                                                                                                     
++                    */
+                     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: No 'Connection: Keep-Alive' nor 'Connection: close'"
+                                " header received.\n Motion continues unchanged.");
+                 }
+-            } else {  
+-                /* 
+-                 * !aliveflag & closeflag 
+-                 * If not a streaming cam, and keepalive is set, and the flag shows we 
++            } else {
++                /*
++                 * !aliveflag & closeflag
++                 * If not a streaming cam, and keepalive is set, and the flag shows we
+                  * received a 'Connection: close' field returned from netcam. It is not likely
+                  * we will get a Keep-Alive and Close header together - this is picked up by
+                  * the test code above.
+@@ -805,11 +805,11 @@ static int netcam_read_first_header(netcam_context_ptr netcam)
+                     free((void *)netcam->cnt->conf.netcam_keepalive);
+                     netcam->cnt->conf.netcam_keepalive = strdup("off");
+                     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Removed netcam Keep-Alive flag because"
+-                               " 'Connection: close' header received.\n Netcam does not support " 
++                               " 'Connection: close' header received.\n Netcam does not support "
+                                "Keep-Alive. Motion continues in non-Keep-Alive.");
+                 } else {
+                     netcam->keepalive_timeup = TRUE;    /* We will close and re-open keep-alive */
+-                    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "Keep-Alive has reached end of valid period.\n" 
++                    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "Keep-Alive has reached end of valid period.\n"
+                                "Motion will close netcam, then resume Keep-Alive with a new socket.");
+                 }
+             }
+@@ -873,7 +873,7 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+ 
+     /* Assure any previous connection has been closed - IF we are not in keepalive. */
+     if (!netcam->connect_keepalive) {
+-        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: disconnecting netcam " 
++        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: disconnecting netcam "
+                    "since keep-alive not set.");
+ 
+         netcam_disconnect(netcam);
+@@ -891,13 +891,13 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+     } else if (netcam->sock == -1) {   /* We are in keepalive mode, check for invalid socket. */
+         /* Must be first time, or closed, create a new socket. */
+         if ((netcam->sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+-            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: with keepalive set, invalid socket." 
++            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: with keepalive set, invalid socket."
+                        "This could be the first time. Creating a new one failed.");
+             return -1;
+         }
+ 
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: with keepalive set, invalid socket."
+-                   "This could be first time, created a new one with fd %d", 
++                   "This could be first time, created a new one with fd %d",
+                     netcam->sock);
+ 
+         /* Record that this connection has not yet received a Keep-Alive header. */
+@@ -909,7 +909,7 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+             return -1;
+         }
+ 
+-        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: SO_KEEPALIVE is %s", 
++        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: SO_KEEPALIVE is %s",
+                    optval ? "ON":"OFF");
+ 
+         /* Set the option active. */
+@@ -922,9 +922,9 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+         }
+ 
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: SO_KEEPALIVE set on socket.");
+-    } 
+-    
+-    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: re-using socket %d since keepalive is set.", 
++    }
++
++    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: re-using socket %d since keepalive is set.",
+                netcam->sock);
+ 
+     /* Lookup the hostname given in the netcam URL. */
+@@ -976,7 +976,7 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+     /* If the connect failed with anything except EINPROGRESS, error. */
+     if ((ret < 0) && (back_err != EINPROGRESS)) {
+         if (!err_flag)
+-            MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: connect() failed (%d)", 
++            MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: connect() failed (%d)",
+                        back_err);
+ 
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: disconnecting netcam (4)");
+@@ -995,9 +995,9 @@ static int netcam_connect(netcam_context_ptr netcam, int err_flag)
+     if (ret == 0) {            /* 0 means timeout. */
+         if (!err_flag)
+             MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: timeout on connect()");
+-        
++
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: disconnecting netcam (2)");
+-        
++
+         netcam_disconnect(netcam);
+         return -1;
+     }
+@@ -1062,7 +1062,7 @@ static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+         real_alloc += NETCAM_BUFFSIZE;
+ 
+     new_size = buff->size + real_alloc;
+-    
++
+     MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: expanding buffer from [%d/%d] to [%d/%d] bytes.",
+                (int) buff->used, (int) buff->size,
+                (int) buff->used, new_size);
+@@ -1321,9 +1321,9 @@ static int netcam_read_html_jpeg(netcam_context_ptr netcam)
+      * as 'latest', and make the buffer previously in 'latest' become
+      * the new 'receiving'.
+      */
+-    if (gettimeofday(&curtime, NULL) < 0) 
++    if (gettimeofday(&curtime, NULL) < 0)
+         MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+-    
++
+     netcam->receiving->image_time = curtime;
+ 
+     /*
+@@ -1336,7 +1336,7 @@ static int netcam_read_html_jpeg(netcam_context_ptr netcam)
+                                  1000000.0 * (curtime.tv_sec - netcam->last_image.tv_sec) +
+                                  (curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+ 
+-        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f", 
++        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+                    netcam->av_frame_time);
+     }
+     netcam->last_image = curtime;
+@@ -1362,7 +1362,7 @@ static int netcam_read_html_jpeg(netcam_context_ptr netcam)
+                        "netcam since keep-alive not set.");
+ 
+             netcam_disconnect(netcam);
+-        } 
++        }
+         MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: leaving netcam connected.");
+     }
+ 
+@@ -1403,9 +1403,9 @@ static int netcam_http_request(netcam_context_ptr netcam)
+          * safe to include it as part of this loop
+          * (Not always true now Keep-Alive is implemented).
+          */
+-        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: about to try to connect, time #%d", 
++        MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: about to try to connect, time #%d",
+                    ix);
+-        
++
+         if (netcam_connect(netcam, 0) != 0) {
+             MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "Failed to open camera - check your config "
+                        "and that netcamera is online");
+@@ -1468,9 +1468,9 @@ static int netcam_mjpg_buffer_refill(netcam_context_ptr netcam)
+ 
+     netcam->response->buffer_left = retval;
+     netcam->response->buffer_pos = netcam->response->buffer;
+- 
++
+     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Refilled buffer with [%d]"
+-               " bytes from the network.", retval); 
++               " bytes from the network.", retval);
+ 
+     return retval;
+ }
+@@ -1478,7 +1478,7 @@ static int netcam_mjpg_buffer_refill(netcam_context_ptr netcam)
+ /**
+  * netcam_read_mjpg_jpeg
+  *
+- *     This routine reads from a netcam using a MJPG-chunk based 
++ *     This routine reads from a netcam using a MJPG-chunk based
+  *     protocol, used by Linksys WVC200 for example.
+  *     This implementation has been made by reverse-engineering
+  *     the protocol, so it may contain bugs and should be considered as
+@@ -1488,7 +1488,7 @@ static int netcam_mjpg_buffer_refill(netcam_context_ptr netcam)
+  *
+  *     The stream consists of JPG pictures, spanned across multiple
+  *     MJPG chunks (in general 3 chunks, altough that's not guaranteed).
+- * 
++ *
+  *     Each data chunk can range from 1 to 65535 bytes + a header, altough
+  *     i have not seen anything bigger than 20000 bytes + a header.
+  *
+@@ -1538,7 +1538,7 @@ static int netcam_read_mjpg_jpeg(netcam_context_ptr netcam)
+ 
+             read_bytes += retval;
+ 
+-            MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Read [%d/%d] header bytes.", 
++            MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Read [%d/%d] header bytes.",
+                        read_bytes, sizeof(mh));
+ 
+             /* If we don't have received a full header, refill our buffer. */
+@@ -1572,26 +1572,26 @@ static int netcam_read_mjpg_jpeg(netcam_context_ptr netcam)
+                                 mh.mh_chunksize - read_bytes);
+             read_bytes += retval;
+             MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Read [%d/%d] chunk bytes,"
+-                       " [%d/%d] total", read_bytes, mh.mh_chunksize, 
++                       " [%d/%d] total", read_bytes, mh.mh_chunksize,
+                        buffer->used + read_bytes, mh.mh_framesize);
+ 
+             if (retval < (int) (mh.mh_chunksize - read_bytes)) {
+                 /* MOTION_LOG(EMG, TYPE_NETCAM, NO_ERRNO, "Chunk incomplete, going to refill."); */
+                 if (netcam_mjpg_buffer_refill(netcam) < 0)
+                     return -1;
+-                
++
+             }
+         }
+         buffer->used += read_bytes;
+ 
+         MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Chunk complete,"
+-                   " buffer used [%d] bytes.", buffer->used); 
++                   " buffer used [%d] bytes.", buffer->used);
+ 
+         /* Is our JPG image complete ? */
+         if (mh.mh_framesize == buffer->used) {
+             MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Image complete,"
+                        " buffer used [%d] bytes.", buffer->used);
+-            break;    
++            break;
+         }
+         /* MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Rlen now at [%d] bytes", rlen); */
+     }
+@@ -1601,9 +1601,9 @@ static int netcam_read_mjpg_jpeg(netcam_context_ptr netcam)
+      * as 'latest', and make the buffer previously in 'latest' become
+      * the new 'receiving'.
+      */
+-    if (gettimeofday(&curtime, NULL) < 0) 
++    if (gettimeofday(&curtime, NULL) < 0)
+         MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+-    
++
+     netcam->receiving->image_time = curtime;
+ 
+     /*
+@@ -1616,7 +1616,7 @@ static int netcam_read_mjpg_jpeg(netcam_context_ptr netcam)
+                                  1000000.0 * (curtime.tv_sec - netcam->last_image.tv_sec) +
+                                  (curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+ 
+-        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f", 
++        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+                    netcam->av_frame_time);
+     }
+     netcam->last_image = curtime;
+@@ -1676,9 +1676,9 @@ static int netcam_read_ftp_jpeg(netcam_context_ptr netcam)
+         buffer->used += len;
+     } while (len > 0);
+ 
+-    if (gettimeofday(&curtime, NULL) < 0) 
++    if (gettimeofday(&curtime, NULL) < 0)
+         MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+-    
++
+     netcam->receiving->image_time = curtime;
+     /*
+      * Calculate our "running average" time for this netcam's
+@@ -1690,7 +1690,7 @@ static int netcam_read_ftp_jpeg(netcam_context_ptr netcam)
+                                  (curtime.tv_sec - netcam->last_image.tv_sec) +
+                                  (curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+ 
+-        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f", 
++        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+                    netcam->av_frame_time);
+     }
+ 
+@@ -1748,17 +1748,17 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+     /*int fstat(int filedes, struct stat *buf);*/
+     do {
+         if (stat(netcam->file->path, &statbuf)) {
+-            MOTION_LOG(CRT, TYPE_NETCAM, SHOW_ERRNO, "%s: stat(%s) error", 
++            MOTION_LOG(CRT, TYPE_NETCAM, SHOW_ERRNO, "%s: stat(%s) error",
+                        netcam->file->path);
+             return -1;
+         }
+-    
++
+         MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: statbuf.st_mtime[%d]"
+-                   " != last_st_mtime[%d]", statbuf.st_mtime, 
++                   " != last_st_mtime[%d]", statbuf.st_mtime,
+                    netcam->file->last_st_mtime);
+ 
+         /* its waits POLLING_TIMEOUT */
+-        if (loop_counter>((POLLING_TIMEOUT*1000*1000)/(POLLING_TIME/1000))) { 
++        if (loop_counter>((POLLING_TIMEOUT*1000*1000)/(POLLING_TIME/1000))) {
+             MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: waiting new file image"
+                        " timeout");
+             return -1;
+@@ -1766,9 +1766,9 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+ 
+         MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: delay waiting new"
+                    " file image ");
+-        
++
+         //its waits 5seconds - READ_TIMEOUT
+-        //SLEEP(netcam->timeout.tv_sec, netcam->timeout.tv_usec*1000); 
++        //SLEEP(netcam->timeout.tv_sec, netcam->timeout.tv_usec*1000);
+         SLEEP(0, POLLING_TIME); // its waits 500ms
+         /*return -1;*/
+         loop_counter++;
+@@ -1776,26 +1776,26 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+     } while (statbuf.st_mtime == netcam->file->last_st_mtime);
+ 
+     netcam->file->last_st_mtime = statbuf.st_mtime;
+-    
++
+     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: processing new file image -"
+                " st_mtime %d", netcam->file->last_st_mtime);
+-    
++
+     /* Assure there's enough room in the buffer. */
+     while (buffer->size < (size_t)statbuf.st_size)
+-        netcam_check_buffsize(buffer, statbuf.st_size); 
+-    
++        netcam_check_buffsize(buffer, statbuf.st_size);
++
+ 
+     /* Do the read */
+     netcam->file->control_file_desc = open(netcam->file->path, O_RDONLY);
+     if (netcam->file->control_file_desc < 0) {
+-        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: open(%s) error: %d", 
++        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: open(%s) error: %d",
+                    netcam->file->path, netcam->file->control_file_desc);
+         return -1;
+     }
+ 
+-    if ((len = read(netcam->file->control_file_desc, 
++    if ((len = read(netcam->file->control_file_desc,
+                     buffer->ptr + buffer->used, statbuf.st_size)) < 0) {
+-        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: read(%s) error: %d", 
++        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: read(%s) error: %d",
+                    netcam->file->control_file_desc, len);
+         return -1;
+     }
+@@ -1805,7 +1805,7 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+ 
+     if (gettimeofday(&curtime, NULL) < 0)
+         MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+-    
++
+     netcam->receiving->image_time = curtime;
+     /*
+      * Calculate our "running average" time for this netcam's
+@@ -1816,8 +1816,8 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+         netcam->av_frame_time = ((9.0 * netcam->av_frame_time) + 1000000.0 *
+                                  (curtime.tv_sec - netcam->last_image.tv_sec) +
+                                  (curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+-    
+-        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f", 
++
++        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+                    netcam->av_frame_time);
+     }
+ 
+@@ -1844,12 +1844,12 @@ static int netcam_read_file_jpeg(netcam_context_ptr netcam)
+     pthread_mutex_unlock(&netcam->mutex);
+ 
+     MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: End");
+-    
++
+     return 0;
+ }
+ 
+ 
+-tfile_context *file_new_context(void) 
++tfile_context *file_new_context(void)
+ {
+     tfile_context *ret;
+ 
+@@ -1862,7 +1862,7 @@ tfile_context *file_new_context(void)
+     return ret;
+ }
+ 
+-void file_free_context(tfile_context* ctxt) 
++void file_free_context(tfile_context* ctxt)
+ {
+     if (ctxt == NULL)
+         return;
+@@ -1873,7 +1873,7 @@ void file_free_context(tfile_context* ctxt)
+     free(ctxt);
+ }
+ 
+-static int netcam_setup_file(netcam_context_ptr netcam, struct url_t *url) 
++static int netcam_setup_file(netcam_context_ptr netcam, struct url_t *url)
+ {
+ 
+     if ((netcam->file = file_new_context()) == NULL)
+@@ -1888,7 +1888,7 @@ static int netcam_setup_file(netcam_context_ptr netcam, struct url_t *url)
+     netcam->file->path = url->path;
+     url->path = NULL;
+ 
+-    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: netcam->file->path %s", 
++    MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: netcam->file->path %s",
+                netcam->file->path);
+ 
+     netcam_url_free(url);
+@@ -1939,7 +1939,7 @@ static void *netcam_handler_loop(void *arg)
+         if (netcam->response) {    /* If html input */
+             if (netcam->caps.streaming == NCS_UNSUPPORTED) {
+                 /* Non-streaming ie. jpeg */
+-                if (!netcam->connect_keepalive || 
++                if (!netcam->connect_keepalive ||
+                     (netcam->connect_keepalive && netcam->keepalive_timeup)) {
+                     /* If keepalive flag set but time up, time to close this socket. */
+                     if (netcam->connect_keepalive && netcam->keepalive_timeup) {
+@@ -1974,7 +1974,7 @@ static void *netcam_handler_loop(void *arg)
+                         MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Unrecognized image"
+                                    " header (%d)", retval);
+                     } else if (retval != -1) {
+-                        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error in header (%d)", 
++                        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error in header (%d)",
+                                    retval);
+                     }
+                     /* Need to have a dynamic delay here. */
+@@ -1995,7 +1995,7 @@ static void *netcam_handler_loop(void *arg)
+                     if ((retval = netcam_read_first_header(netcam) != 2)) {
+                         if (retval > 0) {
+                             MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO,
+-                                      "%s: Unrecognized image header (%d)",  
++                                      "%s: Unrecognized image header (%d)",
+                                       retval);
+                         } else if (retval != -1) {
+                             MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO,
+@@ -2017,16 +2017,36 @@ static void *netcam_handler_loop(void *arg)
+                  */
+             }
+         }
++
++
++#ifdef FFMPEG_V55
++        if (netcam->caps.streaming == NCS_RTSP) {
++            if (netcam->rtsp->format_context == NULL) {      // We must have disconnected.  Try to reconnect
++                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Attempting to reconnect");
++                rtsp_connect(netcam);
++                continue;
++            } else {
++                // We think we are connected...
++                if (netcam->get_image(netcam) < 0) {
++                    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Bad image attempting to reconnect");
++                    //Nope.  We are not or got bad image.  Reconnect
++                    rtsp_connect(netcam);
++                    continue;
++                }
++            }
++        }
++#endif
+         if (netcam->get_image(netcam) < 0) {
+-            MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error getting jpeg image");
+-            /* If FTP connection, attempt to re-connect to server. */
+-            if (netcam->ftp) {
+-                close(netcam->ftp->control_file_desc);
+-                if (ftp_connect(netcam) < 0) 
+-                    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Trying to re-connect");
+-                
++            if (netcam->caps.streaming != NCS_RTSP) {
++                MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error getting jpeg image");
++                /* If FTP connection, attempt to re-connect to server. */
++                if (netcam->ftp) {
++                    close(netcam->ftp->control_file_desc);
++                    if (ftp_connect(netcam) < 0)
++                        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Trying to re-connect");
++                }
++                continue;
+             }
+-            continue;
+         }
+         /*
+          * FIXME
+@@ -2065,6 +2085,11 @@ static void *netcam_handler_loop(void *arg)
+     /* The loop continues forever, or until motion shutdown. */
+     }
+ 
++#ifdef FFMPEG_V55
++    if (netcam->caps.streaming == NCS_RTSP)
++        netcam_shutdown_rtsp(netcam);
++#endif
++
+     /* Our thread is finished - decrement motion's thread count. */
+     pthread_mutex_lock(&global_lock);
+     threads_running--;
+@@ -2101,7 +2126,7 @@ static void *netcam_handler_loop(void *arg)
+  * Returns:             0 on success,
+  *                      or -1 if an fatal error occurs.
+  */
+-static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url) 
++static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+ {
+     struct context *cnt = netcam->cnt;
+     const char *ptr;                  /* Working var */
+@@ -2115,8 +2140,8 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+     memset(netcam->response, 0, sizeof(struct rbuf));
+ 
+     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Netcam has flags:"
+-               " HTTP/1.0: %s HTTP/1.1: %s Keep-Alive %s.",  
+-               netcam->connect_http_10 ? "1":"0", netcam->connect_http_11 ? "1":"0", 
++               " HTTP/1.0: %s HTTP/1.1: %s Keep-Alive %s.",
++               netcam->connect_http_10 ? "1":"0", netcam->connect_http_11 ? "1":"0",
+                netcam->connect_keepalive ? "ON":"OFF");
+ 
+     /*
+@@ -2136,7 +2161,7 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+     if (ptr) {
+         userpass = mymalloc(strlen(ptr) + 3);
+         strcpy(userpass, ptr);
+-    } else { 
++    } else {
+         userpass = NULL;
+     }
+ 
+@@ -2189,13 +2214,13 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+         ptr = mymalloc(strlen(url->service) + strlen(url->host)
+                        + strlen(url->path) + 4);
+         sprintf((char *)ptr, "http://%s%s", url->host, url->path);
+-        
++
+         netcam->connect_keepalive = FALSE; /* Disable Keepalive if proxy */
+         free((void *)netcam->cnt->conf.netcam_keepalive);
+         netcam->cnt->conf.netcam_keepalive = strdup("off");
+ 
+         MOTION_LOG(NTC, TYPE_NETCAM, NO_ERRNO, "%s: "
+-                   "Removed netcam_keepalive flag due to proxy set." 
++                   "Removed netcam_keepalive flag due to proxy set."
+                    "Proxy is incompatible with Keep-Alive.");
+     } else {
+         /* If no proxy, set as netcam_url path. */
+@@ -2210,22 +2235,22 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+ 
+     ix += strlen(ptr);
+ 
+-    /* 
++    /*
+      * Now add the required number of characters for the close header
+      * or Keep-Alive header.  We test the flag which can be unset if
+      * there is a problem (rather than the flag in the conf structure
+      * which is read-only.
+      */
+- 
+-    if (netcam->connect_keepalive) 
++
++    if (netcam->connect_keepalive)
+         ix += strlen(connect_req_keepalive);
+-    else 
++    else
+         ix += strlen(connect_req_close);
+-    
++
+ 
+     /*
+-     * Point to either the HTTP 1.0 or 1.1 request header set     
+-     * If the configuration is anything other than 1.1, use 1.0   
++     * Point to either the HTTP 1.0 or 1.1 request header set
++     * If the configuration is anything other than 1.1, use 1.0
+      * as a default. This avoids a chance of being left with none.
+      */
+     if (netcam->connect_http_11 == TRUE)
+@@ -2242,13 +2267,13 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+ 
+     /* Now create the request string with an sprintf. */
+     sprintf(netcam->connect_request, connect_req, ptr,
+-            netcam->connect_host); 
++            netcam->connect_host);
+ 
+-    if (netcam->connect_keepalive)  
++    if (netcam->connect_keepalive)
+         strcat(netcam->connect_request, connect_req_keepalive);
+-    else 
++    else
+         strcat(netcam->connect_request, connect_req_close);
+-    
++
+ 
+     if (userpass) {
+         strcat(netcam->connect_request, request_pass);
+@@ -2282,7 +2307,7 @@ static int netcam_http_build_url(netcam_context_ptr netcam, struct url_t *url)
+  * Returns:     0 on success (camera link ok) or -1 if an error occurred.
+  *
+  */
+-static int netcam_setup_html(netcam_context_ptr netcam, struct url_t *url) 
++static int netcam_setup_html(netcam_context_ptr netcam, struct url_t *url)
+ {
+     /*
+      * This netcam is http-based, so build the required URL and
+@@ -2358,7 +2383,7 @@ static int netcam_setup_mjpg(netcam_context_ptr netcam, struct url_t *url)
+     return 0;
+ }
+ 
+-static int netcam_setup_ftp(netcam_context_ptr netcam, struct url_t *url) 
++static int netcam_setup_ftp(netcam_context_ptr netcam, struct url_t *url)
+ {
+     struct context *cnt = netcam->cnt;
+     const char *ptr;
+@@ -2413,13 +2438,13 @@ static int netcam_setup_ftp(netcam_context_ptr netcam, struct url_t *url)
+     return 0;
+ }
+ 
+-#ifdef have_av_get_media_type_string
++#ifdef FFMPEG_V55
+ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+ {
+   struct context *cnt = netcam->cnt;
+   const char *ptr;
+   int ret = -1;
+-  
++
+   netcam->caps.streaming = NCS_RTSP;
+   netcam->rtsp = rtsp_new_context();
+ 
+@@ -2427,12 +2452,12 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+     MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: unable to create rtsp context");
+     return -1;
+   }
+-  
++
+   /*
+    * Allocate space for a working string to contain the path.
+    * The extra 5 is for "://", ":" and string terminator.
+    */
+-  
++
+   // force port to a sane value
+   if (netcam->connect_port > 65536) {
+     netcam->connect_port = 65536;
+@@ -2440,41 +2465,64 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+     netcam->connect_port = 0;
+   }
+ 
+-  ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
+-		 + 5 + strlen(url->path) + 5);
+-  sprintf((char *)ptr, "%s://%s:%d%s", url->service,
+-	  netcam->connect_host, netcam->connect_port, url->path);
+-  
+-  netcam->rtsp->path = (char *)ptr;
+-  
+-  if (cnt->conf.netcam_userpass != NULL) {
+-    ptr = cnt->conf.netcam_userpass;
+-  } else {
+-    ptr = url->userpass;  /* Don't set this one NULL, gets freed. */
+-  }
+-  
+-  if (ptr != NULL) {
+-    char *cptr;
+-    
+-    if ((cptr = strchr(ptr, ':')) == NULL) {
+-      netcam->rtsp->user = mystrdup(ptr);
++    if (cnt->conf.netcam_userpass != NULL) {
++        ptr = cnt->conf.netcam_userpass;
+     } else {
+-      netcam->rtsp->user = mymalloc((cptr - ptr));
+-      memcpy(netcam->rtsp->user, ptr,(cptr - ptr));
+-      netcam->rtsp->pass = mystrdup(cptr + 1);
++        ptr = url->userpass;  /* Don't set this one NULL, gets freed. */
++    }
++
++    if (ptr != NULL) {
++        char *cptr;
++        if ((cptr = strchr(ptr, ':')) == NULL) {
++            netcam->rtsp->user = mystrdup(ptr);
++        } else {
++            netcam->rtsp->user = mymalloc((cptr - ptr));
++            memcpy(netcam->rtsp->user, ptr,(cptr - ptr));
++            netcam->rtsp->pass = mystrdup(cptr + 1);
++        }
+     }
+-  }
+ 
+-  netcam_url_free(url);
++    /*
++    Need a method to query the path and
++    determine the authentication type if needed.
++    avformat_open_input returns file not found when
++    it wants authentication and it is not provided.
++    right now, if user specified a password, we will
++    prepend it onto the path to make it happier so we
++    can at least try basic authentication.
++    */
++
++    if ((netcam->rtsp->user != NULL) && (netcam->rtsp->pass != NULL)) {
++        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
++	          + 5 + strlen(url->path) + 5
++              + strlen(netcam->rtsp->user) + strlen(netcam->rtsp->pass) + 5 );
++        sprintf((char *)ptr, "%s://%s:%s@%s:%d%s",
++                url->service,netcam->rtsp->user,netcam->rtsp->pass,
++                netcam->connect_host, netcam->connect_port, url->path);
++    }
++    else {
++        ptr = mymalloc(strlen(url->service) + strlen(netcam->connect_host)
++	          + 5 + strlen(url->path) + 5);
++        sprintf((char *)ptr, "%s://%s:%d%s", url->service,
++	        netcam->connect_host, netcam->connect_port, url->path);
++    }
++    netcam->rtsp->path = (char *)ptr;
+ 
+-  /*
+-   * The RTSP context should be all ready to attempt a connection with
+-   * the server, so we try ....
+-   */
+-  ret = rtsp_connect(netcam);
+-  if (ret < 0) return ret;
++    netcam_url_free(url);
++
++    /*
++     * Now we need to set some flags for the callback function.
++     */
++    netcam->rtsp->readingframe = 0;
++
++    /*
++     * The RTSP context should be all ready to attempt a connection with
++     * the server, so we try ....
++     */
++    ret = rtsp_connect(netcam);
++    if (ret < 0) return ret;
+ 
+-  netcam->get_image = netcam_read_rtsp_image;
++    netcam->get_image = netcam_read_rtsp_image;
+ 
+   return 0;
+ }
+@@ -2498,7 +2546,7 @@ static int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url)
+  *      error reply from the system call.
+  *
+  */
+-ssize_t netcam_recv(netcam_context_ptr netcam, void *buffptr, size_t buffsize) 
++ssize_t netcam_recv(netcam_context_ptr netcam, void *buffptr, size_t buffsize)
+ {
+     ssize_t retval;
+     fd_set fd_r;
+@@ -2527,7 +2575,7 @@ ssize_t netcam_recv(netcam_context_ptr netcam, void *buffptr, size_t buffsize)
+  *      handled.
+  *      This function is also called from motion_init if first time connection
+  *      fails and we start retrying until we get a valid first frame from the
+- *      camera. 
++ *      camera.
+  *
+  * Parameters:
+  *
+@@ -2579,7 +2627,7 @@ void netcam_cleanup(netcam_context_ptr netcam, int init_retry_flag)
+ 
+     if (netcam->caps.streaming == NCS_UNSUPPORTED)
+         pthread_cond_signal(&netcam->cap_cond);
+-    
++
+ 
+     /*
+      * Once the camera-handler gets to the end of it's loop (probably as
+@@ -2619,45 +2667,45 @@ void netcam_cleanup(netcam_context_ptr netcam, int init_retry_flag)
+     pthread_mutex_unlock(&netcam->mutex);
+ 
+     /* and cleanup the rest of the netcam_context structure. */
+-    if (netcam->connect_host != NULL) 
++    if (netcam->connect_host != NULL)
+         free(netcam->connect_host);
+ 
+-    if (netcam->connect_request != NULL) 
++    if (netcam->connect_request != NULL)
+         free(netcam->connect_request);
+-    
+ 
+-    if (netcam->boundary != NULL) 
++
++    if (netcam->boundary != NULL)
+         free(netcam->boundary);
+-    
++
+ 
+     if (netcam->latest != NULL) {
+-        if (netcam->latest->ptr != NULL) 
++        if (netcam->latest->ptr != NULL)
+             free(netcam->latest->ptr);
+-        
++
+         free(netcam->latest);
+     }
+ 
+     if (netcam->receiving != NULL) {
+-        if (netcam->receiving->ptr != NULL) 
++        if (netcam->receiving->ptr != NULL)
+             free(netcam->receiving->ptr);
+-        
++
+         free(netcam->receiving);
+     }
+ 
+     if (netcam->jpegbuf != NULL) {
+-        if (netcam->jpegbuf->ptr != NULL) 
++        if (netcam->jpegbuf->ptr != NULL)
+             free(netcam->jpegbuf->ptr);
+-    
++
+         free(netcam->jpegbuf);
+     }
+ 
+-    if (netcam->ftp != NULL) 
++    if (netcam->ftp != NULL)
+         ftp_free_context(netcam->ftp);
+-    else 
++    else
+         netcam_disconnect(netcam);
+-    
+ 
+-    if (netcam->response != NULL) 
++
++    if (netcam->response != NULL)
+         free(netcam->response);
+ 
+     pthread_mutex_destroy(&netcam->mutex);
+@@ -2721,9 +2769,9 @@ int netcam_next(struct context *cnt, unsigned char *image)
+      * approach is to just return a NULL (failed) to the caller (an
+      * error message has already been produced by the libjpeg routines).
+      */
+-    if (setjmp(netcam->setjmp_buffer)) 
++    if (setjmp(netcam->setjmp_buffer))
+         return NETCAM_GENERAL_ERROR | NETCAM_JPEG_CONV_ERROR;
+-    
++
+     /* If there was no error, process the latest image buffer. */
+     return netcam_proc_jpeg(netcam, image);
+ }
+@@ -2791,7 +2839,7 @@ int netcam_start(struct context *cnt)
+     pthread_cond_init(&netcam->cap_cond, NULL);
+     pthread_cond_init(&netcam->pic_ready, NULL);
+     pthread_cond_init(&netcam->exiting, NULL);
+-    
++
+     /* Initialise the average frame time to the user's value. */
+     netcam->av_frame_time = 1000000.0 / cnt->conf.frame_limit;
+ 
+@@ -2828,7 +2876,7 @@ int netcam_start(struct context *cnt)
+     netcam_url_parse(&url, cnt->conf.netcam_url);
+ 
+     if (!url.host) {
+-        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: Invalid netcam_url (%s)", 
++        MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: Invalid netcam_url (%s)",
+                    cnt->conf.netcam_url);
+         netcam_url_free(&url);
+         return -1;
+@@ -2842,7 +2890,7 @@ int netcam_start(struct context *cnt)
+ 
+     /* Get HTTP Mode (1.0 default, 1.0 Keep-Alive, 1.1) flag from config
+      * and report its stata for debug reasons.
+-     * The flags in the conf structure is read only and cannot be 
++     * The flags in the conf structure is read only and cannot be
+      * unset if the Keep-Alive needs to be switched off (ie. netcam does
+      * not turn out to support it. That is handled by unsetting the flags
+      * in the context structures (cnt->...) only.
+@@ -2863,9 +2911,9 @@ int netcam_start(struct context *cnt)
+     }
+ 
+     MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: Netcam_http parameter '%s'"
+-               " converts to flags: HTTP/1.0: %s HTTP/1.1: %s Keep-Alive %s.", 
+-               cnt->conf.netcam_keepalive, 
+-               netcam->connect_http_10 ? "1":"0", netcam->connect_http_11 ? "1":"0", 
++               " converts to flags: HTTP/1.0: %s HTTP/1.1: %s Keep-Alive %s.",
++               cnt->conf.netcam_keepalive,
++               netcam->connect_http_10 ? "1":"0", netcam->connect_http_11 ? "1":"0",
+                netcam->connect_keepalive ? "ON":"OFF");
+ 
+     /* Initialise the netcam socket to -1 to trigger a connection by the keep-alive logic. */
+@@ -2892,13 +2940,13 @@ int netcam_start(struct context *cnt)
+ 
+         strcpy(url.service, "http"); /* Put back a real URL service. */
+         retval = netcam_setup_mjpg(netcam, &url);
+-#ifdef have_av_get_media_type_string        
++#ifdef FFMPEG_V55
+     } else if ((url.service) && (!strcmp(url.service, "rtsp"))) {
+         MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO, "%s: now calling"
+                     " netcam_setup_rtsp()");
+ 
+         retval = netcam_setup_rtsp(netcam, &url);
+-#endif        
++#endif
+     } else {
+         MOTION_LOG(CRT, TYPE_NETCAM, NO_ERRNO, "%s: Invalid netcam service '%s' - "
+                    "must be http, ftp, mjpg or file.", url.service);
+@@ -2922,7 +2970,7 @@ int netcam_start(struct context *cnt)
+         return -1;
+     }
+ 
+-#ifdef have_av_get_media_type_string
++#ifdef FFMPEG_V55
+     if (netcam->caps.streaming != NCS_RTSP) {
+ #endif
+         /*
+@@ -2955,7 +3003,7 @@ int netcam_start(struct context *cnt)
+                        " is not modulo 8", netcam->height);
+             return -3;
+         }
+-#ifdef have_av_get_media_type_string        
++#ifdef FFMPEG_V55
+     } else {
+         // not jpeg, get the dimensions
+         netcam->width = netcam->rtsp->codec_context->width;
+diff --git a/netcam_rtsp.c b/netcam_rtsp.c
+index 87c4fd0..d266b75 100644
+--- a/netcam_rtsp.c
++++ b/netcam_rtsp.c
+@@ -2,7 +2,7 @@
+ #include "netcam_rtsp.h"
+ #include "motion.h"
+ 
+-#ifdef have_av_get_media_type_string
++#ifdef FFMPEG_V55
+ 
+ /****************************************************
+  * Duplicated static functions - FIXME
+@@ -37,7 +37,7 @@ static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+         real_alloc += NETCAM_BUFFSIZE;
+ 
+     new_size = buff->size + real_alloc;
+-    
++
+     MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: expanding buffer from [%d/%d] to [%d/%d] bytes.",
+                (int) buff->used, (int) buff->size,
+                (int) buff->used, new_size);
+@@ -53,31 +53,31 @@ static void netcam_check_buffsize(netcam_buff_ptr buff, size_t numbytes)
+ 
+ static int decode_packet(AVPacket *packet, netcam_buff_ptr buffer, AVFrame *frame, AVCodecContext *cc)
+ {
+-  int check = 0;
+-  int ret = avcodec_decode_video2(cc, frame, &check, packet);
+-  
+-  if (ret < 0) {
+-    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error decoding video packet");
+-    return 0;
+-  }
+-  
+-  if (check == 0) {
+-    // no frame could be decoded...keep trying
+-    return 0;
+-  }
++    int check = 0;
++    int ret = avcodec_decode_video2(cc, frame, &check, packet);
+ 
+-  int frame_size = av_image_get_buffer_size(cc->pix_fmt, cc->width, cc->height, 1);
++    if (ret < 0) {
++        MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Error decoding video packet");
++        return 0;
++     }
+ 
+-  /* Assure there's enough room in the buffer. */
+-  netcam_check_buffsize(buffer, frame_size);
++    if (check == 0) {
++        // no frame could be decoded...keep trying
++        return 0;
++    }
+ 
+-  av_image_copy_to_buffer((uint8_t *)buffer->ptr, frame_size,
++    int frame_size = av_image_get_buffer_size(cc->pix_fmt, cc->width, cc->height, 1);
++
++    /* Assure there's enough room in the buffer. */
++    netcam_check_buffsize(buffer, frame_size);
++
++    av_image_copy_to_buffer((uint8_t *)buffer->ptr, frame_size,
+ 			  (const uint8_t **)(frame->data), frame->linesize,
+ 			  cc->pix_fmt, cc->width, cc->height, 1);
+ 
+-  buffer->used = frame_size;
+-  
+-  return frame_size;
++    buffer->used = frame_size;
++
++    return frame_size;
+ }
+ 
+ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AVMediaType type)
+@@ -88,7 +88,7 @@ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AV
+     AVCodec *dec = NULL;
+     ret = av_find_best_stream(fmt_ctx, type, -1, -1, NULL, 0);
+     if (ret < 0) {
+-		MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream %s in input!", av_get_media_type_string(type));
++	    MOTION_LOG(ERR, TYPE_NETCAM, NO_ERRNO, "%s: Could not find stream %s in input!", av_get_media_type_string(type));
+         return ret;
+     } else {
+         *stream_idx = ret;
+@@ -122,211 +122,208 @@ static int open_codec_context(int *stream_idx, AVFormatContext *fmt_ctx, enum AV
+ */
+ struct rtsp_context *rtsp_new_context(void)
+ {
+-  struct rtsp_context *ret;
+-  
+-  /* Note that mymalloc will exit on any problem. */
+-  ret = mymalloc(sizeof(struct rtsp_context));
+-
+-  memset(ret, 0, sizeof(struct rtsp_context));
+-  
+-  return ret;
++    struct rtsp_context *ret;
++
++    /* Note that mymalloc will exit on any problem. */
++    ret = mymalloc(sizeof(struct rtsp_context));
++
++    memset(ret, 0, sizeof(struct rtsp_context));
++
++    return ret;
+ }
+ 
+-/**
+-* rtsp_free_context
+-*
+-*      Free the resources allocated for this context.
+-*
+-* Parameters
+-*
+-*      ctxt    Pointer to the rtsp_context structure.
+-*
+-* Returns:     Nothing
+-*
+-*/
+-static void rtsp_free_context(struct rtsp_context *ctxt)
++static int decode_interrupt_cb(void *ctx)
+ {
+-  if (ctxt == NULL)
+-    return;
+-  
+-  if (ctxt->path != NULL)
+-    free(ctxt->path);
+-  
+-  if (ctxt->user)
+-    free(ctxt->user);
+-  
+-  if (ctxt->pass)
+-    free(ctxt->pass);
+-  
+-  if (ctxt->format_context != NULL) {
+-    	avformat_close_input(&ctxt->format_context);
+-  }
+-  
+-  if (ctxt->codec_context != NULL) {
+-    	avcodec_close(ctxt->codec_context);
+-  }
+-  
+-  free(ctxt);
++    struct rtsp_context *rtsp = (struct rtsp_context *)ctx;
++
++    if (rtsp->readingframe != 1) {
++        return 0;
++    } else {
++        struct timeval interrupttime;
++        if (gettimeofday(&interrupttime, NULL) < 0) {
++            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: Failed to get interrupt time");
++        }
++        if ((interrupttime.tv_sec - rtsp->startreadtime.tv_sec ) > 10){
++            MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Timeout getting frame %d",interrupttime.tv_sec - rtsp->startreadtime.tv_sec);
++            return 1;
++        } else{
++            return 0;
++        }
++    }
++
++    //should not be possible to get here
++    return 0;
+ }
+ 
+ int rtsp_connect(netcam_context_ptr netcam)
+ {
+-  if (netcam->rtsp == NULL) {
+-    netcam->rtsp = rtsp_new_context();
++    int ret;
+ 
+-    if (netcam->rtsp == NULL) {
+-      MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to create context(%s)", netcam->rtsp->path);
+-      return -1;
++    if (netcam->rtsp->path == NULL) {
++        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Null path passed to connect (%s)", netcam->rtsp->path);
++        return -1;
+     }
+-  }
+ 
+-  // open the network connection
+-  AVDictionary *opts = 0;
+-  av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+ 
+-  int ret = avformat_open_input(&netcam->rtsp->format_context, netcam->rtsp->path, NULL, &opts);
+-  if (ret < 0) {
+-    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %d - %s", netcam->rtsp->path, ret, av_err2str(ret));
+-    rtsp_free_context(netcam->rtsp);
+-    netcam->rtsp = NULL;
+-    return ret;
+-  }
++    // open the network connection
++    AVDictionary *opts = 0;
++    av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+ 
+-  // fill out stream information
+-  ret = avformat_find_stream_info(netcam->rtsp->format_context, NULL);
+-  if (ret < 0) {
+-    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to find stream info: %d", ret);
+-    rtsp_free_context(netcam->rtsp);
+-    netcam->rtsp = NULL;
+-    return -1;
+-  }
++    netcam->rtsp->format_context = avformat_alloc_context();
++    netcam->rtsp->format_context->interrupt_callback.callback = decode_interrupt_cb;
++    netcam->rtsp->format_context->interrupt_callback.opaque = netcam->rtsp;
+ 
+-  ret = open_codec_context(&netcam->rtsp->video_stream_index, netcam->rtsp->format_context, AVMEDIA_TYPE_VIDEO);
+-  if (ret < 0) {
+-    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open codec context: %d", ret);
+-    rtsp_free_context(netcam->rtsp);
+-    netcam->rtsp = NULL;
+-    return -1;
+-  }
+-  
+-  netcam->rtsp->codec_context = netcam->rtsp->format_context->streams[netcam->rtsp->video_stream_index]->codec;
+-  
+-  // start up the feed
+-  av_read_play(netcam->rtsp->format_context);
+-
+-  return 0;
++    ret = avformat_open_input(&netcam->rtsp->format_context, netcam->rtsp->path, NULL, &opts);
++    if (ret < 0) {
++        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open input(%s): %d - %s", netcam->rtsp->path,av_err2str(ret));
++        if (ret == -1094995529) MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: Authentication?");
++        avformat_close_input(&netcam->rtsp->format_context);
++        return ret;
++    }
++
++    // fill out stream information
++    ret = avformat_find_stream_info(netcam->rtsp->format_context, NULL);
++    if (ret < 0) {
++        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to find stream info: %d", ret);
++        avformat_close_input(&netcam->rtsp->format_context);
++        return -1;
++    }
++
++    ret = open_codec_context(&netcam->rtsp->video_stream_index, netcam->rtsp->format_context, AVMEDIA_TYPE_VIDEO);
++    if (ret < 0) {
++        MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO, "%s: unable to open codec context: %d", ret);
++        avformat_close_input(&netcam->rtsp->format_context);
++        avcodec_close(netcam->rtsp->codec_context);
++        return -1;
++    }
++
++    netcam->rtsp->codec_context = netcam->rtsp->format_context->streams[netcam->rtsp->video_stream_index]->codec;
++
++    netcam->rtsp->frame = av_frame_alloc();
++
++    // start up the feed
++    av_read_play(netcam->rtsp->format_context);
++
++    return 0;
+ }
+ 
+ int netcam_read_rtsp_image(netcam_context_ptr netcam)
+ {
+-  if (netcam->rtsp == NULL) {
+-    if (rtsp_connect(netcam) < 0) {
+-      return -1;
+-    }
+-  }
++    /* This code is called many times so optimize and do
++     * little as possible in here.
++     */
+ 
+-  AVCodecContext *cc = netcam->rtsp->codec_context;
+-  AVFormatContext *fc = netcam->rtsp->format_context;
+-  netcam_buff_ptr buffer;
++    struct timeval    curtime;
++    netcam_buff_ptr    buffer;
++    AVPacket           packet;
++    int                size_decoded;
++    static int        usual_size_decoded;
+ 
+-  /* Point to our working buffer. */
+-  buffer = netcam->receiving;
+-  buffer->used = 0;
++    /* Point to our working buffer. */
++    buffer = netcam->receiving;
++    buffer->used = 0;
+ 
+-  AVFrame *frame = avcodec_alloc_frame();
++    av_init_packet(&packet);
+ 
+-  AVPacket packet;
+-  
+-  av_init_packet(&packet);
++    packet.data = NULL;
++    packet.size = 0;
+ 
+-  packet.data = NULL;
+-  packet.size = 0;
++    size_decoded = 0;
++    usual_size_decoded = 0;
+ 
+-  int size_decoded = 0;
+-  static int usual_size_decoded = 0;
++    if (gettimeofday(&curtime, NULL) < 0) {
++        MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
++    }
++    netcam->rtsp->startreadtime = curtime;
++
++    netcam->rtsp->readingframe = 1;
++    while (size_decoded == 0 && av_read_frame(netcam->rtsp->format_context, &packet) >= 0) {
++        if(packet.stream_index != netcam->rtsp->video_stream_index) {
++            // not our packet, skip
++           continue;
++        }
++        size_decoded = decode_packet(&packet, buffer, netcam->rtsp->frame, netcam->rtsp->codec_context);
++    }
++    netcam->rtsp->readingframe = 0;
+ 
+-  while (size_decoded == 0 && av_read_frame(fc, &packet) >= 0) {
++    // at this point, we are finished with the packet and frame, so free them.
++    av_free_packet(&packet);
+ 
+-    if(packet.stream_index != netcam->rtsp->video_stream_index) {
+-      // not our packet, skip
+-      continue;
++    if (size_decoded == 0) {
++        // something went wrong, end of stream? Interupted?
++        MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: invalid frame! %d", size_decoded);
++        return -1;
+     }
+ 
+-    size_decoded = decode_packet(&packet, buffer, frame, cc);
+-  }
+-
+-  if (size_decoded == 0) {
+-    // something went wrong, end of stream?
+-    MOTION_LOG(ERR, TYPE_NETCAM, SHOW_ERRNO, "%s: invalid frame!");
+-    return -1;
+-  }
+-
+-  if (size_decoded != usual_size_decoded) {
+-    MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: unusual frame size of %d!", size_decoded);
+-    usual_size_decoded = size_decoded;
+-  }
+-
+-  // at this point, we are finished with the packet and frame, so free them.
+-  av_free_packet(&packet);
+-  av_free(frame);
+-  
+-  struct timeval curtime;
+-  
+-  if (gettimeofday(&curtime, NULL) < 0) {
+-    MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: gettimeofday");
+-  }
+-  
+-  netcam->receiving->image_time = curtime;
+-  
+-  /*
+-   * Calculate our "running average" time for this netcam's
+-   * frame transmissions (except for the first time).
+-   * Note that the average frame time is held in microseconds.
+-   */
+-  if (netcam->last_image.tv_sec) {
+-    netcam->av_frame_time = ((9.0 * netcam->av_frame_time) + 1000000.0 *
++    if (size_decoded != usual_size_decoded) {
++        if (usual_size_decoded !=0) {
++            MOTION_LOG(WRN, TYPE_NETCAM, SHOW_ERRNO, "%s: unusual frame size of %d!", size_decoded);
++        }
++        usual_size_decoded = size_decoded;
++    }
++    // Time may be slightly off due to it being when we initiated the reading of the frame
++    // rather than when we finally got a good frame.  But we are averaging frame times anyway..
++    netcam->receiving->image_time = curtime;
++
++    /*
++     * Calculate our "running average" time for this netcam's
++     * frame transmissions (except for the first time).
++     * Note that the average frame time is held in microseconds.
++     */
++    if (netcam->last_image.tv_sec) {
++        netcam->av_frame_time = ((9.0 * netcam->av_frame_time) + 1000000.0 *
+ 			     (curtime.tv_sec - netcam->last_image.tv_sec) +
+ 			     (curtime.tv_usec- netcam->last_image.tv_usec)) / 10.0;
+-    
+-    MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
++
++        MOTION_LOG(DBG, TYPE_NETCAM, NO_ERRNO, "%s: Calculated frame time %f",
+ 	       netcam->av_frame_time);
+-  }
+-  
+-  netcam->last_image = curtime;
+-  
+-  netcam_buff *xchg;
+-  
+-  /*
+-   * read is complete - set the current 'receiving' buffer atomically
+-   * as 'latest', and make the buffer previously in 'latest' become
+-   * the new 'receiving'.
+-   */
+-  pthread_mutex_lock(&netcam->mutex);
+-
+-  xchg = netcam->latest;
+-  netcam->latest = netcam->receiving;
+-  netcam->receiving = xchg;
+-  netcam->imgcnt++;
+-  
+-  /*
+-   * We have a new frame ready.  We send a signal so that
+-   * any thread (e.g. the motion main loop) waiting for the
+-   * next frame to become available may proceed.
+-   */
+-  pthread_cond_signal(&netcam->pic_ready);
+-  
+-  pthread_mutex_unlock(&netcam->mutex);
+-  
+-  return 0;
++    }
++
++    netcam->last_image = curtime;
++
++    netcam_buff *xchg;
++
++    /*
++     * read is complete - set the current 'receiving' buffer atomically
++     * as 'latest', and make the buffer previously in 'latest' become
++     * the new 'receiving'.
++     */
++    pthread_mutex_lock(&netcam->mutex);
++
++    xchg = netcam->latest;
++    netcam->latest = netcam->receiving;
++    netcam->receiving = xchg;
++    netcam->imgcnt++;
++
++    /*
++     * We have a new frame ready.  We send a signal so that
++     * any thread (e.g. the motion main loop) waiting for the
++     * next frame to become available may proceed.
++     */
++    pthread_cond_signal(&netcam->pic_ready);
++
++    pthread_mutex_unlock(&netcam->mutex);
++
++    return 0;
+ }
+ 
+ 
+ void netcam_shutdown_rtsp(netcam_context_ptr netcam)
+ {
+-  if (netcam->rtsp != NULL) {
+-    rtsp_free_context(netcam->rtsp);
++    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO,"%s: shutting down rtsp");
++
++    av_free(netcam->rtsp->frame);
++    avcodec_close(netcam->rtsp->codec_context);
++    avformat_close_input(&netcam->rtsp->format_context);
++
++    if (netcam->rtsp->path != NULL) free(netcam->rtsp->path);
++    if (netcam->rtsp->user != NULL) free(netcam->rtsp->user);
++    if (netcam->rtsp->pass != NULL) free(netcam->rtsp->pass);
++
++    free(netcam->rtsp);
++
+     netcam->rtsp = NULL;
+-  }
++    MOTION_LOG(ALR, TYPE_NETCAM, NO_ERRNO,"%s: rtsp shut down");
+ }
+ 
+ #endif
+diff --git a/netcam_rtsp.h b/netcam_rtsp.h
+index 38ef565..35ad6a1 100644
+--- a/netcam_rtsp.h
++++ b/netcam_rtsp.h
+@@ -7,12 +7,15 @@
+ 
+ 
+ struct rtsp_context {
+-	AVFormatContext*      format_context;
+-	AVCodecContext*       codec_context;
+-	int                   video_stream_index;
+-	char*                 path;
+-	char*                 user;
+-	char*                 pass;
++    AVFormatContext*      format_context;
++    AVCodecContext*       codec_context;
++    AVFrame               *frame;
++    int                   video_stream_index;
++    char*                 path;
++    char*                 user;
++    char*                 pass;
++    int                   readingframe;
++    struct timeval        startreadtime;
+ };
+ 
+ //int netcam_setup_rtsp(netcam_context_ptr netcam, struct url_t *url);
+-- 
+1.8.1.4
+

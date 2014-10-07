@@ -1,0 +1,28 @@
+From 80e3c49786bc89dbadc2ed4b92ab3894e00faac2 Mon Sep 17 00:00:00 2001
+From: root <tosiara@users.noreply.github.com>
+Date: Tue, 8 Jul 2014 13:10:12 +0300
+Subject: [PATCH 10/26] Bug introduced in
+ https://github.com/tosiara/motion/commit/41e5da55ec4369dffc1347f0820f8ff58c446f74,
+ and fixed by Mr-Dave in
+ https://github.com/Mr-Dave/motion/commit/976fe425a52c811acf0805e1fc0b966b2c32a412
+
+---
+ webhttpd.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/webhttpd.c b/webhttpd.c
+index 0bd0914..22b5add 100644
+--- a/webhttpd.c
++++ b/webhttpd.c
+@@ -370,7 +370,7 @@ static void url_decode(char *urlencoded, size_t length)
+                 *urldecoded++ = c[1];
+             }
+ 
+-	} else if (*data == '<' || *data == '+' || data == '>') {
++	} else if (*data == '<' || *data == '+' || *data == '>') {
+ 	  *urldecoded++ = ' ';
+         } else {
+             *urldecoded++ = *data;
+-- 
+1.8.1.4
+

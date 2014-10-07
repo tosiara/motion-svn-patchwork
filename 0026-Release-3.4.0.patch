@@ -1,0 +1,47 @@
+From 568e68b93993128677ecb5156474decaa9bc0864 Mon Sep 17 00:00:00 2001
+From: tosiara <tosiara@users.noreply.github.com>
+Date: Thu, 2 Oct 2014 12:52:29 +0300
+Subject: [PATCH 26/26] Release 3.4.0
+
+---
+ CHANGELOG             | 2 +-
+ git-commit-version.sh | 4 ++--
+ version.sh            | 3 ++-
+ 3 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/CHANGELOG b/CHANGELOG
+index 5b3d285..6807a05 100644
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -1,4 +1,4 @@
+-SVN trunk Summary of Changes
++3.4.0 Summary of Changes
+ 
+ Features
+    * Insert Blanking frames http://www.lavrsen.dk/twiki/bin/view/Motion/FeatureRequest2007x12x16x132522 (Dag Erlandsson)
+diff --git a/git-commit-version.sh b/git-commit-version.sh
+index 2a47df1..1856aef 100755
+--- a/git-commit-version.sh
++++ b/git-commit-version.sh
+@@ -1,5 +1,5 @@
+ #!/bin/sh
+ 
+-SNV_VERSION=`git show -s --format=%H`
+-echo -n "Git-$SNV_VERSION"
++SNV_VERSION=`git show -s --format=%h`
++echo -n "3.4.0-Git-$SNV_VERSION"
+ 
+diff --git a/version.sh b/version.sh
+index 68dc73e..b19e219 100755
+--- a/version.sh
++++ b/version.sh
+@@ -3,4 +3,5 @@
+ SNV_VERSION=`cd "$1" && LC_ALL=C svn info 2> /dev/null | grep Revision | cut -d' ' -f2`
+ test $SNV_VERSION || SNV_VERSION=`cd "$1" && grep revision .svn/entries 2>/dev/null | cut -d '"' -f2`
+ test $SNV_VERSION || SNV_VERSION=UNKNOWN
+-echo -n "trunkREV$SNV_VERSION"
++SNV_VERSION=`git show -s --format=%h`
++echo -n "3.4.0-Git-$SNV_VERSION"
+-- 
+1.8.1.4
+

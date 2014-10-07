@@ -1,0 +1,45 @@
+From 254acbeca32c8e750214bb4d464db5e0f9a2b261 Mon Sep 17 00:00:00 2001
+From: Dave <zz4077@comcast.net>
+Date: Sat, 21 Jun 2014 00:11:46 -0600
+Subject: [PATCH 20/26] RTSP fully functional with Libav packages(0.8 and 0.9)
+ in addition to FFMpeg git
+
+---
+ CHANGELOG    | 1 +
+ configure.ac | 4 ++--
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/CHANGELOG b/CHANGELOG
+index 6313087..688b9db 100755
+--- a/CHANGELOG
++++ b/CHANGELOG
+@@ -69,6 +69,7 @@ Features
+    * Revised INSTALL to have sample PI configure option.(Mr-Dave)
+    * Revised configure.ac to generate compiler flag AVFMT_V53.(Mr-Dave)
+    * Revised INSTALL to indicate standard APT packages for RTSP (Mr-Dave)
++   * Revised configure.ac to recognize libavformat version 54 RTSP (Mr-Dave)
+ 
+    
+ Bugfixes
+diff --git a/configure.ac b/configure.ac
+index f25b40d..44211f8 100755
+--- a/configure.ac
++++ b/configure.ac
+@@ -567,12 +567,12 @@ if test "${FFMPEG_OK}" = "found"; then
+             ]])],
+             [            
+             AC_MSG_RESULT(no)
+-            AC_MSG_CHECKING(avformat version 53)
++            AC_MSG_CHECKING(avformat version 53/54)
+             AC_RUN_IFELSE([AC_LANG_SOURCE([
+             [
+              #include <${AVFORMAT_DIR}>
+              int main(void){
+-                 if (LIBAVFORMAT_VERSION_MAJOR = 53) return -1;
++                 if ((LIBAVFORMAT_VERSION_MAJOR = 53) || (LIBAVFORMAT_VERSION_MAJOR = 54)) return -1;
+                  return 0;
+              }
+             ]])],
+-- 
+1.8.1.4
+
